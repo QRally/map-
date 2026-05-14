@@ -8,14 +8,85 @@
     <title>Rally Route Master v1.1</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root {
-            --bg: #121212;
-            --panel: #1e1e1e;
-            --accent: #f0ad4e;
-            --danger: #d9534f;
-            --success: #5cb85c;
-            --text: #ffffff;
-        }
+    :root {
+        --bg: #121212;
+        --panel: #1e1e1e;
+        --accent: #00ffcc;
+        --danger: #d9534f;
+        --success: #5cb85c;
+    }
+
+    /* Force the body to be exactly the height of the screen */
+    html, body { 
+        height: 100%; 
+        margin: 0; 
+        padding: 0; 
+        overflow: hidden; 
+        background: var(--bg);
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Map fills the top space */
+    #map { 
+        flex-grow: 1; 
+        width: 100%; 
+        background: #000; 
+    }
+
+    /* Control Panel stays at the bottom and sizes to content */
+    .ui-panel { 
+        flex-shrink: 0;
+        padding: 15px; 
+        padding-bottom: 30px; /* Extra padding for bottom-swipe bars */
+        display: grid; 
+        grid-template-columns: 1fr 1fr; 
+        gap: 10px; 
+        background: var(--panel);
+        border-top: 2px solid #333;
+    }
+
+    .stats { 
+        grid-column: span 2; 
+        display: flex; 
+        justify-content: space-between; 
+        font-family: monospace; 
+        font-size: 18px; 
+        background: #000; 
+        padding: 10px; 
+        border-radius: 6px;
+        margin-bottom: 5px;
+    }
+
+    button { 
+        border: none; border-radius: 10px; color: white; font-weight: 800; 
+        font-size: 16px; text-transform: uppercase; cursor: pointer;
+        min-height: 60px; /* Guaranteed height for fat-fingers */
+    }
+
+    .btn-record { grid-column: span 2; background: var(--success); }
+    .btn-record.active { background: var(--danger); animation: pulse 1.5s infinite; }
+    .btn-action { background: #444; }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+</style>
+
+<body>
+    <div id="map"></div>
+
+    <div class="ui-panel">
+        <div class="stats">
+            <span id="stat-points">PTS: 0</span>
+            <span id="stat-dist">0.00 km</span>
+        </div>
+        
+        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
+        <button class="btn-action" onclick="downloadGPX()">Save GPX</button>
+        <button class="btn-action" onclick="clearRoute()">Clear All</button>
+    </div>
+    
+    </body>
+
 
         body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
         
