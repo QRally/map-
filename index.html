@@ -3,104 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <title>Rally Route Master v1.2</title>
+    <title>Rally Route Master v1.5</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg: #f8f9fa;
-            --panel: #222222;
-            --accent: #00ffcc;
-            --danger: #ff4444;
-            --success: #28a745;
-            --text-light: #ffffff;
+            --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc;
+            --danger: #ff4444; --success: #28a745;
         }
-
-        html, body { 
-            height: 100%; 
-            margin: 0; 
-            padding: 0; 
-            overflow: hidden; 
-            background: var(--bg);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            flex-direction: column;
-        }
-
-        #map { 
-            flex-grow: 1; 
-            width: 100%; 
-            background: #ddd; 
-        }
-
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: sans-serif; }
+        #map { flex-grow: 1; width: 100%; }
         .ui-panel { 
-            flex-shrink: 0;
-            padding: 20px; 
-            /* env() handles the "notch" or home bar area on modern iPhones/Androids */
-            padding-bottom: calc(20px + env(safe-area-inset-bottom)); 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 15px; 
-            background: var(--panel);
-            border-top: 3px solid var(--accent);
-            box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
+            flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom));
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; 
+            background: var(--panel); border-top: 3px solid var(--accent);
         }
-
         .stats { 
-            grid-column: span 2; 
-            display: flex; 
-            justify-content: space-between; 
-            font-family: "Courier New", monospace; 
-            font-size: 22px; 
-            font-weight: bold;
-            background: #000; 
-            color: var(--accent);
-            padding: 15px; 
-            border-radius: 8px;
-            margin-bottom: 10px;
+            grid-column: span 3; display: flex; justify-content: space-between; 
+            font-family: monospace; font-size: 20px; background: #000; 
+            color: var(--accent); padding: 12px; border-radius: 8px; margin-bottom: 5px;
         }
-
         button { 
-            border: none; 
-            border-radius: 12px; 
-            color: white; 
-            font-weight: 900; 
-            font-size: 18px; 
-            text-transform: uppercase; 
-            cursor: pointer;
-            /* Taller buttons for easier use in a moving vehicle */
-            min-height: 75px;
-            touch-action: manipulation;
-            transition: transform 0.1s, filter 0.1s;
+            border: none; border-radius: 10px; color: white; font-weight: 800; 
+            font-size: 14px; text-transform: uppercase; cursor: pointer;
+            min-height: 65px; touch-action: manipulation; border-bottom: 4px solid rgba(0,0,0,0.3);
         }
-
-        button:active {
-            transform: scale(0.96);
-            filter: brightness(0.8);
-        }
-
-        .btn-record { 
-            grid-column: span 2; 
-            background: var(--success); 
-            border-bottom: 5px solid #1e7e34;
-        }
-
-        .btn-record.active { 
-            background: var(--danger); 
-            border-bottom: 5px solid #bd2130;
-            animation: pulse 1s infinite; 
-        }
-
-        .btn-action { 
-            background: #555; 
-            border-bottom: 5px solid #333;
-        }
-
+        .btn-record { grid-column: span 3; background: var(--success); font-size: 18px; }
+        .btn-record.active { background: var(--danger); animation: pulse 1s infinite; }
+        .btn-action { background: #555; }
+        #fileInput { display: none; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
 </head>
-<body>
+<body onload="checkRecoveryData()">
 
     <div id="map"></div>
 
@@ -109,34 +43,44 @@
             <span id="stat-points">PTS: 0</span>
             <span id="stat-dist">0.00 km</span>
         </div>
-        
         <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
-        <button class="btn-action" onclick="downloadGPX()">Save GPX</button>
-        <button class="btn-action" onclick="clearRoute()">Clear All</button>
+        <button class="btn-action" onclick="document.getElementById('fileInput').click()">Import</button>
+        <button class="btn-action" onclick="downloadGPX()">Save</button>
+        <button class="btn-action" onclick="clearRoute()">Clear</button>
+        <input type="file" id="fileInput" accept=".gpx" onchange="importGPX(event)">
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
+
     <script>
         let points = [];
         let totalDist = 0;
         let isRecording = false;
         let watchID = null;
-        let wakeLock = null;
+        let liveMarker = null;
 
-        // Map setup with Conventional Tiles (OpenStreetMap)
-        const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
+        const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.7}).addTo(map);
 
-        // Bold red line for the route to stand out against standard tiles
-        let routeLine = L.polyline([], {color: '#ff0000', weight: 8, opacity: 0.8}).addTo(map);
+        // Continuous Position Tracking for the Blue Dot
+        if ("geolocation" in navigator) {
+            navigator.geolocation.watchPosition((pos) => {
+                const { latitude, longitude } = pos.coords;
+                updateLiveMarker(latitude, longitude);
+                if (isRecording) {
+                    addPoint(latitude, longitude);
+                    map.panTo([latitude, longitude]);
+                }
+            }, (err) => console.error(err), { enableHighAccuracy: true });
+        }
 
-        map.on('click', (e) => {
-            if (isRecording) return;
-            addPoint(e.latlng.lat, e.latlng.lng);
-        });
+        function updateLiveMarker(lat, lng) {
+            if (!liveMarker) {
+                liveMarker = L.circleMarker([lat, lng], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1, pane: 'markerPane' }).addTo(map);
+            } else { liveMarker.setLatLng([lat, lng]); }
+        }
 
         function addPoint(lat, lon) {
             const newPos = L.latLng(lat, lon);
@@ -147,34 +91,39 @@
             points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
             routeLine.addLatLng(newPos);
             updateUI();
+            
+            // --- SAFETY NET: Save to LocalStorage ---
+            localStorage.setItem('rally_backup_points', JSON.stringify(points));
+            localStorage.setItem('rally_backup_dist', totalDist);
+        }
+
+        function checkRecoveryData() {
+            const savedPoints = localStorage.getItem('rally_backup_points');
+            const savedDist = localStorage.getItem('rally_backup_dist');
+            if (savedPoints && JSON.parse(savedPoints).length > 0) {
+                if (confirm("Found unsaved route data. Restore it?")) {
+                    points = JSON.parse(savedPoints);
+                    totalDist = parseFloat(savedDist);
+                    const latLngs = points.map(p => [p.lat, p.lon]);
+                    routeLine.setLatLngs(latLngs);
+                    if (latLngs.length > 0) map.fitBounds(routeLine.getBounds());
+                    updateUI();
+                } else {
+                    clearStorage();
+                }
+            }
+        }
+
+        function clearStorage() {
+            localStorage.removeItem('rally_backup_points');
+            localStorage.removeItem('rally_backup_dist');
         }
 
         async function toggleRecording() {
             const btn = document.getElementById('recordBtn');
             isRecording = !isRecording;
-
-            if (isRecording) {
-                btn.innerText = "⏺ Recording...";
-                btn.classList.add('active');
-                
-                try { 
-                    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); 
-                } catch (err) {}
-
-                watchID = navigator.geolocation.watchPosition(
-                    (pos) => {
-                        addPoint(pos.coords.latitude, pos.coords.longitude);
-                        map.panTo([pos.coords.latitude, pos.coords.longitude]);
-                    },
-                    (err) => console.error(err),
-                    { enableHighAccuracy: true, maximumAge: 0 }
-                );
-            } else {
-                btn.innerText = "Start Recce Recording";
-                btn.classList.remove('active');
-                if (watchID) navigator.geolocation.clearWatch(watchID);
-                if (wakeLock) { wakeLock.release(); wakeLock = null; }
-            }
+            btn.innerText = isRecording ? "⏺ Recording..." : "Start Recce Recording";
+            btn.classList.toggle('active', isRecording);
         }
 
         function updateUI() {
@@ -183,10 +132,10 @@
         }
 
         function downloadGPX() {
-            if(points.length < 2) return alert("Add more points first!");
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Recce</name><trkseg>`;
-            points.forEach(p => gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`);
-            gpx += `\n</trkseg></trk></gpx>`;
+            if(points.length < 2) return alert("No data.");
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
+            points.forEach(p => gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
+            gpx += `</trkseg></trk></gpx>`;
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
@@ -195,11 +144,33 @@
         }
 
         function clearRoute() {
-            if(!confirm("Clear everything?")) return;
-            points = [];
-            totalDist = 0;
+            if(!confirm("Clear route?")) return;
+            points = []; totalDist = 0;
             routeLine.setLatLngs([]);
+            clearStorage();
             updateUI();
+        }
+
+        function importGPX(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                new L.GPX(e.target.result, {
+                    async: true,
+                    polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
+                    marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
+                }).on('loaded', function(e) {
+                    const gpxLayer = e.target;
+                    const trackPoints = gpxLayer.getLayers()[0].getLatLngs();
+                    points = trackPoints.map(p => ({ lat: p.lat.toFixed(6), lon: p.lng.toFixed(6) }));
+                    totalDist = gpxLayer.get_distance() / 1000;
+                    routeLine.setLatLngs(trackPoints);
+                    map.fitBounds(gpxLayer.getBounds());
+                    updateUI();
+                }).addTo(map);
+            };
+            reader.readAsText(file);
         }
     </script>
 </body>
