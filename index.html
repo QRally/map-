@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>Rally Route Master v1.1</title>
+    <title>Rally Route Master v1.2</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
-            --bg: #121212;
-            --panel: #1e1e1e;
+            --bg: #f8f9fa;
+            --panel: #222222;
             --accent: #00ffcc;
-            --danger: #d9534f;
-            --success: #5cb85c;
-            --text: #ffffff;
+            --danger: #ff4444;
+            --success: #28a745;
+            --text-light: #ffffff;
         }
 
         html, body { 
@@ -31,18 +31,20 @@
         #map { 
             flex-grow: 1; 
             width: 100%; 
-            background: #000; 
+            background: #ddd; 
         }
 
         .ui-panel { 
             flex-shrink: 0;
-            padding: 15px; 
-            padding-bottom: env(safe-area-inset-bottom, 30px); 
+            padding: 20px; 
+            /* env() handles the "notch" or home bar area on modern iPhones/Androids */
+            padding-bottom: calc(20px + env(safe-area-inset-bottom)); 
             display: grid; 
             grid-template-columns: 1fr 1fr; 
-            gap: 10px; 
+            gap: 15px; 
             background: var(--panel);
-            border-top: 2px solid #333;
+            border-top: 3px solid var(--accent);
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
         }
 
         .stats { 
@@ -50,43 +52,52 @@
             display: flex; 
             justify-content: space-between; 
             font-family: "Courier New", monospace; 
-            font-size: 18px; 
+            font-size: 22px; 
+            font-weight: bold;
             background: #000; 
             color: var(--accent);
-            padding: 10px; 
-            border-radius: 6px;
-            border: 1px solid #444;
-            margin-bottom: 5px;
+            padding: 15px; 
+            border-radius: 8px;
+            margin-bottom: 10px;
         }
 
         button { 
             border: none; 
-            border-radius: 10px; 
+            border-radius: 12px; 
             color: white; 
-            font-weight: 800; 
-            font-size: 16px; 
+            font-weight: 900; 
+            font-size: 18px; 
             text-transform: uppercase; 
             cursor: pointer;
-            min-height: 60px;
+            /* Taller buttons for easier use in a moving vehicle */
+            min-height: 75px;
             touch-action: manipulation;
+            transition: transform 0.1s, filter 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.96);
+            filter: brightness(0.8);
         }
 
         .btn-record { 
             grid-column: span 2; 
             background: var(--success); 
-            box-shadow: 0 4px 0 #3e8e41;
+            border-bottom: 5px solid #1e7e34;
         }
 
         .btn-record.active { 
             background: var(--danger); 
-            box-shadow: 0 4px 0 #a94442;
-            animation: pulse 1.5s infinite; 
+            border-bottom: 5px solid #bd2130;
+            animation: pulse 1s infinite; 
         }
 
-        .btn-action { background: #444; box-shadow: 0 4px 0 #222; }
-        .btn-action:active { transform: translateY(2px); box-shadow: 0 2px 0 #222; }
+        .btn-action { 
+            background: #555; 
+            border-bottom: 5px solid #333;
+        }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
@@ -112,16 +123,16 @@
         let watchID = null;
         let wakeLock = null;
 
-        // Initialize Map
+        // Map setup with Conventional Tiles (OpenStreetMap)
         const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 13);
         
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '© CartoDB'
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
         }).addTo(map);
 
-        let routeLine = L.polyline([], {color: '#00ffcc', weight: 6, opacity: 0.9}).addTo(map);
+        // Bold red line for the route to stand out against standard tiles
+        let routeLine = L.polyline([], {color: '#ff0000', weight: 8, opacity: 0.8}).addTo(map);
 
-        // Click to add point (Manual Mode)
         map.on('click', (e) => {
             if (isRecording) return;
             addPoint(e.latlng.lat, e.latlng.lng);
@@ -129,12 +140,10 @@
 
         function addPoint(lat, lon) {
             const newPos = L.latLng(lat, lon);
-            
             if (points.length > 0) {
                 const lastPos = L.latLng(points[points.length-1].lat, points[points.length-1].lon);
                 totalDist += lastPos.distanceTo(newPos) / 1000;
             }
-
             points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
             routeLine.addLatLng(newPos);
             updateUI();
@@ -145,32 +154,26 @@
             isRecording = !isRecording;
 
             if (isRecording) {
-                btn.innerText = "⏺ Recording Path...";
+                btn.innerText = "⏺ Recording...";
                 btn.classList.add('active');
                 
-                // Screen Wake Lock API
                 try { 
-                    if ('wakeLock' in navigator) {
-                        wakeLock = await navigator.wakeLock.request('screen'); 
-                    }
-                } catch (err) { console.error("WakeLock failed:", err); }
+                    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); 
+                } catch (err) {}
 
                 watchID = navigator.geolocation.watchPosition(
                     (pos) => {
                         addPoint(pos.coords.latitude, pos.coords.longitude);
                         map.panTo([pos.coords.latitude, pos.coords.longitude]);
                     },
-                    (err) => console.error("Geolocation error:", err),
+                    (err) => console.error(err),
                     { enableHighAccuracy: true, maximumAge: 0 }
                 );
             } else {
                 btn.innerText = "Start Recce Recording";
                 btn.classList.remove('active');
                 if (watchID) navigator.geolocation.clearWatch(watchID);
-                if (wakeLock) {
-                    wakeLock.release();
-                    wakeLock = null;
-                }
+                if (wakeLock) { wakeLock.release(); wakeLock = null; }
             }
         }
 
@@ -180,29 +183,19 @@
         }
 
         function downloadGPX() {
-            if(points.length < 2) return alert("Plot at least 2 points.");
-            
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="RallyRouteMaster" xmlns="http://www.topografix.com/GPX/1/1">
-  <trk><name>Recce_${new Date().toISOString()}</name><trkseg>`;
-            
-            points.forEach(p => {
-                gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`;
-            });
-
-            gpx += `\n  </trkseg></trk></gpx>`;
-
+            if(points.length < 2) return alert("Add more points first!");
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>Recce</name><trkseg>`;
+            points.forEach(p => gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`);
+            gpx += `\n</trkseg></trk></gpx>`;
             const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const a = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            a.href = url;
-            a.download = `rally_route_${Math.floor(Date.now()/1000)}.gpx`;
+            a.href = URL.createObjectURL(blob);
+            a.download = `route_${Date.now()}.gpx`;
             a.click();
-            URL.revokeObjectURL(url);
         }
 
         function clearRoute() {
-            if(!confirm("Delete this route?")) return;
+            if(!confirm("Clear everything?")) return;
             points = [];
             totalDist = 0;
             routeLine.setLatLngs([]);
