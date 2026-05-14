@@ -8,100 +8,39 @@
     <title>Rally Route Master v1.1</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-    :root {
-        --bg: #121212;
-        --panel: #1e1e1e;
-        --accent: #00ffcc;
-        --danger: #d9534f;
-        --success: #5cb85c;
-    }
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --accent: #00ffcc;
+            --danger: #d9534f;
+            --success: #5cb85c;
+            --text: #ffffff;
+        }
 
-    /* Force the body to be exactly the height of the screen */
-    html, body { 
-        height: 100%; 
-        margin: 0; 
-        padding: 0; 
-        overflow: hidden; 
-        background: var(--bg);
-        display: flex;
-        flex-direction: column;
-    }
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden; 
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
 
-    /* Map fills the top space */
-    #map { 
-        flex-grow: 1; 
-        width: 100%; 
-        background: #000; 
-    }
+        #map { 
+            flex-grow: 1; 
+            width: 100%; 
+            background: #000; 
+        }
 
-    /* Control Panel stays at the bottom and sizes to content */
-    .ui-panel { 
-        flex-shrink: 0;
-        padding: 15px; 
-        padding-bottom: 30px; /* Extra padding for bottom-swipe bars */
-        display: grid; 
-        grid-template-columns: 1fr 1fr; 
-        gap: 10px; 
-        background: var(--panel);
-        border-top: 2px solid #333;
-    }
-
-    .stats { 
-        grid-column: span 2; 
-        display: flex; 
-        justify-content: space-between; 
-        font-family: monospace; 
-        font-size: 18px; 
-        background: #000; 
-        padding: 10px; 
-        border-radius: 6px;
-        margin-bottom: 5px;
-    }
-
-    button { 
-        border: none; border-radius: 10px; color: white; font-weight: 800; 
-        font-size: 16px; text-transform: uppercase; cursor: pointer;
-        min-height: 60px; /* Guaranteed height for fat-fingers */
-    }
-
-    .btn-record { grid-column: span 2; background: var(--success); }
-    .btn-record.active { background: var(--danger); animation: pulse 1.5s infinite; }
-    .btn-action { background: #444; }
-
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-</style>
-
-<body>
-    <div id="map"></div>
-
-    <div class="ui-panel">
-        <div class="stats">
-            <span id="stat-points">PTS: 0</span>
-            <span id="stat-dist">0.00 km</span>
-        </div>
-        
-        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
-        <button class="btn-action" onclick="downloadGPX()">Save GPX</button>
-        <button class="btn-action" onclick="clearRoute()">Clear All</button>
-    </div>
-    
-    </body>
-
-
-        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); overflow: hidden; }
-        
-        /* Map takes up 65% of screen */
-        #map { height: 65vh; width: 100%; background: #000; touch-action: none; }
-
-        /* UI Panel takes up 35% of screen */
         .ui-panel { 
-            height: 35vh; 
-            padding: 12px; 
+            flex-shrink: 0;
+            padding: 15px; 
+            padding-bottom: env(safe-area-inset-bottom, 30px); 
             display: grid; 
-            grid-template-rows: auto 1fr 1fr; 
             grid-template-columns: 1fr 1fr; 
             gap: 10px; 
-            box-sizing: border-box; 
             background: var(--panel);
             border-top: 2px solid #333;
         }
@@ -111,16 +50,24 @@
             display: flex; 
             justify-content: space-between; 
             font-family: "Courier New", monospace; 
-            font-size: 16px; 
+            font-size: 18px; 
             background: #000; 
-            padding: 8px 12px; 
+            color: var(--accent);
+            padding: 10px; 
             border-radius: 6px;
             border: 1px solid #444;
+            margin-bottom: 5px;
         }
 
         button { 
-            border: none; border-radius: 10px; color: white; font-weight: 800; 
-            font-size: 16px; text-transform: uppercase; cursor: pointer;
+            border: none; 
+            border-radius: 10px; 
+            color: white; 
+            font-weight: 800; 
+            font-size: 16px; 
+            text-transform: uppercase; 
+            cursor: pointer;
+            min-height: 60px;
             touch-action: manipulation;
         }
 
@@ -144,113 +91,123 @@
 </head>
 <body>
 
-<div id="map"></div>
+    <div id="map"></div>
 
-<div class="ui-panel">
-    <div class="stats">
-        <span id="stat-points">PTS: 0</span>
-        <span id="stat-dist">0.00 km</span>
+    <div class="ui-panel">
+        <div class="stats">
+            <span id="stat-points">PTS: 0</span>
+            <span id="stat-dist">0.00 km</span>
+        </div>
+        
+        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
+        <button class="btn-action" onclick="downloadGPX()">Save GPX</button>
+        <button class="btn-action" onclick="clearRoute()">Clear All</button>
     </div>
-    
-    <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
-    <button class="btn-action" onclick="downloadGPX()">Save GPX</button>
-    <button class="btn-action" onclick="clearRoute()">Clear All</button>
-</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    let points = [];
-    let totalDist = 0;
-    let isRecording = false;
-    let watchID = null;
-    let wakeLock = null;
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let points = [];
+        let totalDist = 0;
+        let isRecording = false;
+        let watchID = null;
+        let wakeLock = null;
 
-    // Initialize Map with Dark Mode Tiles
-    const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 13); // Centered near Lampeter area
-    
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '© CartoDB'
-    }).addTo(map);
-
-    let routeLine = L.polyline([], {color: '#00ffcc', weight: 6, opacity: 0.9}).addTo(map);
-
-    // Manual Plotting
-    map.on('click', (e) => {
-        if (isRecording) return;
-        addPoint(e.latlng.lat, e.latlng.lng);
-    });
-
-    function addPoint(lat, lon) {
-        const newPos = L.latLng(lat, lon);
+        // Initialize Map
+        const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 13);
         
-        if (points.length > 0) {
-            const lastPos = L.latLng(points[points.length-1].lat, points[points.length-1].lon);
-            totalDist += lastPos.distanceTo(newPos) / 1000;
-        }
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB'
+        }).addTo(map);
 
-        points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
-        routeLine.addLatLng(newPos);
-        updateUI();
-    }
+        let routeLine = L.polyline([], {color: '#00ffcc', weight: 6, opacity: 0.9}).addTo(map);
 
-    async function toggleRecording() {
-        const btn = document.getElementById('recordBtn');
-        isRecording = !isRecording;
-
-        if (isRecording) {
-            btn.innerText = "⏺ Recording Path...";
-            btn.classList.add('active');
-            
-            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
-
-            watchID = navigator.geolocation.watchPosition(
-                (pos) => {
-                    addPoint(pos.coords.latitude, pos.coords.longitude);
-                    map.panTo([pos.coords.latitude, pos.coords.longitude]);
-                },
-                (err) => console.error(err),
-                { enableHighAccuracy: true, maximumAge: 0 }
-            );
-        } else {
-            btn.innerText = "Start Recce Recording";
-            btn.classList.remove('active');
-            navigator.geolocation.clearWatch(watchID);
-            if (wakeLock) wakeLock.release();
-        }
-    }
-
-    function updateUI() {
-        document.getElementById('stat-points').innerText = `PTS: ${points.length}`;
-        document.getElementById('stat-dist').innerText = `${totalDist.toFixed(2)} km`;
-    }
-
-    function downloadGPX() {
-        if(points.length < 2) return alert("Plot at least 2 points.");
-        
-        let gpx = `<?xml version="1.0" encoding="UTF-8"?>
-<gpx version="1.1" creator="RallyRouteMaster" xmlns="http://www.topografix.com/GPX/1/1">
-  <trk><name>Recce_${new Date().toISOString()}</name><trkseg>`;
-        
-        points.forEach(p => {
-            gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`;
+        // Click to add point (Manual Mode)
+        map.on('click', (e) => {
+            if (isRecording) return;
+            addPoint(e.latlng.lat, e.latlng.lng);
         });
 
-        gpx += `\n  </trkseg></trk></gpx>`;
+        function addPoint(lat, lon) {
+            const newPos = L.latLng(lat, lon);
+            
+            if (points.length > 0) {
+                const lastPos = L.latLng(points[points.length-1].lat, points[points.length-1].lon);
+                totalDist += lastPos.distanceTo(newPos) / 1000;
+            }
 
-        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `rally_route_${Math.floor(Date.now()/1000)}.gpx`;
-        a.click();
-    }
+            points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
+            routeLine.addLatLng(newPos);
+            updateUI();
+        }
 
-    function clearRoute() {
-        if(!confirm("Delete this route?")) return;
-        points = [];
-        totalDist = 0;
-        routeLine.setLatLngs([]);
-        updateUI();
-    }
-</script>
+        async function toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            isRecording = !isRecording;
+
+            if (isRecording) {
+                btn.innerText = "⏺ Recording Path...";
+                btn.classList.add('active');
+                
+                // Screen Wake Lock API
+                try { 
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen'); 
+                    }
+                } catch (err) { console.error("WakeLock failed:", err); }
+
+                watchID = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        addPoint(pos.coords.latitude, pos.coords.longitude);
+                        map.panTo([pos.coords.latitude, pos.coords.longitude]);
+                    },
+                    (err) => console.error("Geolocation error:", err),
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            } else {
+                btn.innerText = "Start Recce Recording";
+                btn.classList.remove('active');
+                if (watchID) navigator.geolocation.clearWatch(watchID);
+                if (wakeLock) {
+                    wakeLock.release();
+                    wakeLock = null;
+                }
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('stat-points').innerText = `PTS: ${points.length}`;
+            document.getElementById('stat-dist').innerText = `${totalDist.toFixed(2)} km`;
+        }
+
+        function downloadGPX() {
+            if(points.length < 2) return alert("Plot at least 2 points.");
+            
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RallyRouteMaster" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>Recce_${new Date().toISOString()}</name><trkseg>`;
+            
+            points.forEach(p => {
+                gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`;
+            });
+
+            gpx += `\n  </trkseg></trk></gpx>`;
+
+            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+            const a = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            a.href = url;
+            a.download = `rally_route_${Math.floor(Date.now()/1000)}.gpx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function clearRoute() {
+            if(!confirm("Delete this route?")) return;
+            points = [];
+            totalDist = 0;
+            routeLine.setLatLngs([]);
+            updateUI();
+        }
+    </script>
 </body>
 </html>
