@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Rally Route Master v1.0</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; font-family: sans-serif; background: #1a1a1a; color: white; overflow: hidden; }
+        #map { height: 70vh; width: 100%; background: #222; }
+        .ui-panel { height: 30vh; padding: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; box-sizing: border-box; }
+        button { 
+            border: none; border-radius: 8px; color: white; font-weight: bold; 
+            font-size: 16px; transition: 0.2s; cursor: pointer;
+        }
+        .btn-record { background: #5cb85c; grid-column: span 2; height: 60px; }
+        .btn-record.active { background: #d9534f; animation: pulse 1.5s infinite; }
+        .btn-action { background: #444; height: 50px; }
+        .stats { grid-column: span 2; display: flex; justify-content: space-between; font-family: monospace; font-size: 14px; background: #000; padding: 5px 10px; border-radius: 4px; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="ui-panel">
+    <div class="stats">
+        <span id="stat-points">Points: 0</span>
+        <span id="stat-dist">Dist: 0.00 km</span>
+    </div>
+    
+    <button id="recordBtn" class="btn-record" onclick="toggleRecording()">START RECCE RECORDING</button>
+    <button class="btn-action" onclick="downloadGPX()">DOWNLOAD GPX</button>
+    <button class="btn-action" onclick="clearRoute()">CLEAR ALL</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    let points = [];
+    let totalDist = 0;
+    let isRecording = false;
+    let watchID = null;
+    let wakeLock = null;
+
+    // Initialize Map
+    const map = L.map('map', { zoomControl: false }).setView([52.48, -3.39], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OSM'
+    }).addTo(map);
+
+    let routeLine = L.polyline([], {color: '#ff3300', weight: 5, opacity: 0.8}).addTo(map);
+
+    // Manual Plotting (Tap map)
+    map.on('click', (e) => {
+        if (isRecording) return; // Disable manual taps while recording
+        addPoint(e.latlng.lat, e.latlng.lng);
+    });
+
+    function addPoint(lat, lon) {
+        const newPos = L.latLng(lat, lon);
+        
+        if (points.length > 0) {
+            const lastPoint = L.latLng(points[points.length-1].lat, points[points.length-1].lon);
+            totalDist += lastPoint.distanceTo(newPos) / 1000;
+        }
+
+        points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
+        routeLine.addLatLng(newPos);
+        updateUI();
+    }
+
+    async function toggleRecording() {
+        const btn = document.getElementById('recordBtn');
+        isRecording = !isRecording;
+
+        if (isRecording) {
+            btn.innerText = "⏺ RECORDING... (TAP TO STOP)";
+            btn.classList.add('active');
+            
+            // Request WakeLock to keep screen on
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) {}
+
+            watchID = navigator.geolocation.watchPosition(
+                (pos) => {
+                    addPoint(pos.coords.latitude, pos.coords.longitude);
+                    map.panTo([pos.coords.latitude, pos.coords.longitude]);
+                },
+                (err) => alert("GPS Error: " + err.message),
+                { enableHighAccuracy: true, maximumAge: 0 }
+            );
+        } else {
+            btn.innerText = "START RECCE RECORDING";
+            btn.classList.remove('active');
+            navigator.geolocation.clearWatch(watchID);
+            if (wakeLock) wakeLock.release();
+        }
+    }
+
+    function updateUI() {
+        document.getElementById('stat-points').innerText = `Points: ${points.length}`;
+        document.getElementById('stat-dist').innerText = `Dist: ${totalDist.toFixed(2)} km`;
+    }
+
+    function downloadGPX() {
+        if(points.length < 2) return alert("Not enough points to export.");
+
+        let gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="RallyMaster" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk><name>Rally_Recce_${new Date().getTime()}</name><trkseg>`;
+        
+        points.forEach(p => {
+            gpx += `\n    <trkpt lat="${p.lat}" lon="${p.lon}"><ele>0</ele></trkpt>`;
+        });
+
+        gpx += `\n  </trkseg></trk></gpx>`;
+
+        const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = "route.gpx";
+        a.click();
+    }
+
+    function clearRoute() {
+        if(!confirm("Clear current route?")) return;
+        points = [];
+        totalDist = 0;
+        routeLine.setLatLngs([]);
+        updateUI();
+    }
+</script>
+</body>
+</html>
