@@ -7,7 +7,6 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#00ffcc">
     <title>QRally v1.7 - TC Edition</title>
-    <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
@@ -16,6 +15,12 @@
         }
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: -apple-system, sans-serif; }
         #map { flex-grow: 1; width: 100%; }
+        
+        /* THE CRITICAL FIX: Hide any image-based markers */
+        .leaflet-marker-icon { display: none !important; }
+        /* Keep the blue dot (Live Marker) and orange circles (TCs) visible */
+        .leaflet-interactive { display: block !important; }
+
         .ui-panel { 
             flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom));
             display: grid; grid-template-columns: 1fr; gap: 10px; 
@@ -27,16 +32,11 @@
             color: var(--accent); padding: 12px; border-radius: 8px; border: 1px solid #444;
         }
         .action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        button { 
-            border: none; border-radius: 10px; color: white; font-weight: 800; 
-            text-transform: uppercase; cursor: pointer; touch-action: manipulation; 
-            border-bottom: 4px solid rgba(0,0,0,0.5);
-        }
-        button:active { transform: translateY(2px); border-bottom-width: 2px; }
+        button { border: none; border-radius: 10px; color: white; font-weight: 800; text-transform: uppercase; cursor: pointer; }
         .btn-record { min-height: 65px; background: var(--success); font-size: 18px; width: 100%; }
         .btn-record.active { background: var(--danger); animation: pulse 1s infinite; }
         .btn-action { min-height: 60px; background: #555; font-size: 12px; }
-        .btn-tc { background: var(--warning); border-bottom-color: #e68900; }
+        .btn-tc { background: var(--warning); }
         #fileInput { display: none; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
@@ -50,16 +50,13 @@
             <span id="stat-points">PTS: 0</span>
             <span id="stat-dist">0.00 km</span>
         </div>
-        
         <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recording</button>
-        
         <div class="action-grid">
             <button class="btn-action btn-tc" onclick="dropTC()">TC</button>
             <button class="btn-action" onclick="document.getElementById('fileInput').click()">IN</button>
             <button class="btn-action" onclick="downloadGPX()">SAVE</button>
             <button class="btn-action" onclick="clearRoute()">CLR</button>
         </div>
-        
         <input type="file" id="fileInput" accept=".gpx" onchange="importGPX(event)">
     </div>
 
@@ -67,33 +64,26 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
 
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
-        }
-
         let points = [], waypoints = [], targetTCs = [];
-        let totalDist = 0, isRecording = false, liveMarker = null, wakeLock = null, gpxLayer = null, lastTriggeredTC = null;
+        let totalDist = 0, isRecording = false, liveMarker = null, gpxLayer = null, lastTriggeredTC = null;
 
         const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.8}).addTo(map);
+        let routeLine = L.polyline([], {color: '#ff0000', weight: 6}).addTo(map);
 
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
                 const { latitude, longitude } = pos.coords;
-                updateLiveMarker(latitude, longitude);
+                if (!liveMarker) {
+                    liveMarker = L.circleMarker([latitude, longitude], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(map);
+                } else { liveMarker.setLatLng([latitude, longitude]); }
+                
                 checkTCProximity(latitude, longitude);
                 if (isRecording) {
                     addPoint(latitude, longitude);
                     map.panTo([latitude, longitude]);
                 }
-            }, (err) => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
-        }
-
-        function updateLiveMarker(lat, lng) {
-            if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(map);
-            } else { liveMarker.setLatLng([lat, lng]); }
+            }, null, { enableHighAccuracy: true });
         }
 
         function addPoint(lat, lon) {
@@ -105,94 +95,46 @@
             points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
             routeLine.addLatLng(newPos);
             updateUI();
-            localStorage.setItem('rally_backup_points', JSON.stringify(points));
-            localStorage.setItem('rally_backup_dist', totalDist);
         }
 
         function dropTC() {
             if (!isRecording) return alert("Start Recording first!");
             const last = points[points.length - 1];
-            if (!last) return;
-            const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
+            const tc = { lat: last.lat, lon: last.lon, id: waypoints.length + 1 };
             waypoints.push(tc);
-            L.circleMarker([tc.lat, tc.lon], {
-                radius: 12, fillColor: "#ff9800", color: "#fff", weight: 3, fillOpacity: 1
-            }).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
-            if (navigator.vibrate) navigator.vibrate(200);
+            L.circleMarker([tc.lat, tc.lon], { radius: 12, fillColor: "#ff9800", color: "#fff", weight: 3, fillOpacity: 1 }).addTo(map);
+        }
+
+        function importGPX(event) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (gpxLayer) map.removeLayer(gpxLayer);
+                gpxLayer = new L.GPX(e.target.result, {
+                    async: true,
+                    marker_options: { startIconUrl: '', endIconUrl: '', wpIconUrl: '' }
+                }).on('loaded', (e) => {
+                    targetTCs = [];
+                    e.target.get_waypoints().forEach((wp, i) => {
+                        const pos = wp.getLatLng();
+                        targetTCs.push({ id: i + 1, lat: pos.lat, lon: pos.lng });
+                        L.circleMarker([pos.lat, pos.lon], { radius: 12, fillColor: "#ff9800", color: "#000", weight: 2, fillOpacity: 0.8 }).addTo(map);
+                    });
+                    map.fitBounds(e.target.getBounds());
+                }).addTo(map);
+            };
+            reader.readAsText(event.target.files[0]);
         }
 
         function checkTCProximity(lat, lon) {
             if (targetTCs.length === 0) return;
             const currentPos = L.latLng(lat, lon);
             targetTCs.forEach(tc => {
-                if (lastTriggeredTC === tc.id) return;
-                if (currentPos.distanceTo(L.latLng(tc.lat, tc.lon)) < 30) {
+                if (lastTriggeredTC !== tc.id && currentPos.distanceTo(L.latLng(tc.lat, tc.lon)) < 30) {
                     lastTriggeredTC = tc.id;
-                    triggerTCHit(tc);
+                    if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+                    alert("CHECKPOINT REACHED: TC " + tc.id);
                 }
             });
-        }
-
-        function triggerTCHit(tc) {
-            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-            const bar = document.getElementById('stats-bar');
-            bar.style.color = "var(--warning)";
-            bar.innerHTML = `<span>CHECKPOINT REACHED</span><span>TC ${tc.id}</span>`;
-            setTimeout(() => { bar.style.color = "var(--accent)"; updateUI(); }, 5000);
-        }
-
-        // --- FIXED IMPORT LOGIC ---
-        function importGPX(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                if(gpxLayer) map.removeLayer(gpxLayer);
-                
-                gpxLayer = new L.GPX(e.target.result, {
-                    async: true,
-                    // Use a blank transparent 1x1 pixel to effectively hide the default markers
-                    marker_options: {
-                        startIconUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-                        endIconUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-                        wpIconUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-                    }
-                }).on('loaded', function(e) {
-                    targetTCs = [];
-                    
-                    // 1. Find all waypoint markers the plugin created and remove them
-                    e.target.eachLayer(layer => {
-                        if (layer instanceof L.Marker) {
-                            e.target.removeLayer(layer);
-                        }
-                    });
-
-                    // 2. Now add our custom orange CircleMarkers
-                    e.target.get_waypoints().forEach((wp, i) => {
-                        const pos = wp.getLatLng();
-                        targetTCs.push({ id: i + 1, lat: pos.lat, lon: pos.lng });
-
-                        L.circleMarker([pos.lat, pos.lon], {
-                            radius: 12, fillColor: "#ff9800", color: "#000", weight: 2, fillOpacity: 0.8
-                        }).addTo(map).bindPopup(wp.options.title || `TC ${i + 1}`);
-                    });
-                    
-                    map.fitBounds(e.target.getBounds());
-                }).addTo(map);
-            };
-            reader.readAsText(file);
-        }
-
-        function downloadGPX() {
-            if(points.length < 2) return alert("No data.");
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="QRally" xmlns="http://www.topografix.com/GPX/1/1">`;
-            waypoints.forEach(wp => { gpx += `\n<wpt lat="${wp.lat}" lon="${wp.lon}"><name>TC ${wp.id}</name><time>${wp.time}</time></wpt>`; });
-            gpx += `\n<trk><trkseg>`;
-            points.forEach(p => gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
-            gpx += `\n</trkseg></trk></gpx>`;
-            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gpx], {type:'application/gpx+xml'}));
-            a.download = `QRally_${Date.now()}.gpx`; a.click();
         }
 
         function updateUI() {
@@ -200,35 +142,18 @@
             document.getElementById('stat-dist').innerText = `${totalDist.toFixed(2)} km`;
         }
 
-        async function toggleRecording() {
+        function toggleRecording() {
             isRecording = !isRecording;
             const btn = document.getElementById('recordBtn');
             btn.innerText = isRecording ? "⏺ RECORDING..." : "START RECORDING";
             btn.classList.toggle('active', isRecording);
-            if (isRecording && 'wakeLock' in navigator) {
-                try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
-            }
         }
 
         function clearRoute() {
-            if(!confirm("Wipe all data?")) return;
-            points = []; waypoints = []; targetTCs = []; totalDist = 0; lastTriggeredTC = null;
-            routeLine.setLatLngs([]);
-            map.eachLayer(l => { 
-                if((l instanceof L.Polyline && l !== routeLine) || (l instanceof L.CircleMarker && l !== liveMarker)) {
-                    map.removeLayer(l); 
-                } 
-            });
-            localStorage.clear(); updateUI();
+            if(confirm("Wipe all?")) location.reload();
         }
 
-        function checkRecoveryData() {
-            const p = localStorage.getItem('rally_backup_points');
-            if (p && JSON.parse(p).length > 0 && confirm("Restore session?")) {
-                points = JSON.parse(p); totalDist = parseFloat(localStorage.getItem('rally_backup_dist')) || 0;
-                routeLine.setLatLngs(points.map(pt => [pt.lat, pt.lon])); updateUI();
-            }
-        }
+        function checkRecoveryData() {} 
     </script>
 </body>
 </html>
