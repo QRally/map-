@@ -116,24 +116,24 @@
         }
 
         function dropTC() {
-    if (!isRecording) return alert("Start Recording first!");
-    const last = points[points.length - 1];
-    if (!last) return;
-    
-    const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
-    waypoints.push(tc);
+            if (!isRecording) return alert("Start Recording first!");
+            const last = points[points.length - 1];
+            if (!last) return;
+            
+            const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
+            waypoints.push(tc);
 
-    // Use a CircleMarker instead of a default Icon Marker
-    L.circleMarker([tc.lat, tc.lon], {
-        radius: 12,
-        fillColor: "#ff9800", // Match your orange TC button
-        color: "#fff",
-        weight: 3,
-        fillOpacity: 1
-    }).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
+            // Use a CircleMarker instead of a default Icon Marker
+            L.circleMarker([tc.lat, tc.lon], {
+                radius: 12,
+                fillColor: "#ff9800", // Match your orange TC button
+                color: "#fff",
+                weight: 3,
+                fillOpacity: 1
+            }).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
 
-    if (navigator.vibrate) navigator.vibrate(200);
-}
+            if (navigator.vibrate) navigator.vibrate(200);
+        }
 
         // --- Player Logic (The "Geofence") ---
         function checkTCProximity(lat, lon) {
@@ -173,25 +173,49 @@
             a.download = `QRally_${Date.now()}.gpx`; a.click();
         }
 
+        // --- Cleaned & Fixed Import Implementation ---
         function importGPX(event) {
-        function in importGPX:
-e.target.get_waypoints().forEach((wp, i) => {
-    const pos = wp.getLatLng();
-    targetTCs.push({ id: i+1, lat: pos.lat, lon: pos.lng });
+            const file = event.target.files[0];
+            if (!file) return;
 
-    // Draw the imported checkpoints as orange circles
-    L.circleMarker([pos.lat, pos.lon], {
-        radius: 12,
-        fillColor: "#ff9800",
-        color: "#000",
-        weight: 2,
-        fillOpacity: 0.8
-    }).addTo(map).bindPopup(wp.name || `TC ${i+1}`);
-});
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const gpxText = e.target.result;
+
+                // Initialize the Leaflet-GPX layer parser
+                gpxLayer = new L.GPX(gpxText, {
+                    async: true,
+                    marker_options: {
+                        startIconUrl: null,
+                        endIconUrl: null,
+                        wpIconUrl: null
+                    },
+                    polyline_options: {
+                        color: '#00ffff',
+                        weight: 4,
+                        opacity: 0.7
+                    }
+                }).on('loaded', function(e) {
+                    // Extract waypoints parsed by the Leaflet-GPX library safely
+                    e.target.get_waypoints().forEach((wp, i) => {
+                        const pos = wp.getLatLng();
+                        targetTCs.push({ id: i + 1, lat: pos.lat, lon: pos.lng });
+
+                        // Draw the target geofence markers on our tracking map
+                        L.circleMarker([pos.lat, pos.lon], {
+                            radius: 12,
+                            fillColor: "#ff9800",
+                            color: "#000",
+                            weight: 2,
+                            fillOpacity: 0.8
+                        }).addTo(map).bindPopup(wp.options.title || `TC ${i + 1}`);
+                    });
+                    
+                    // Center the rally stage viewport automatically
                     map.fitBounds(e.target.getBounds());
                 }).addTo(map);
             };
-            reader.readAsText(event.target.files[0]);
+            reader.readAsText(file);
         }
 
         async function toggleRecording() {
@@ -199,14 +223,23 @@ e.target.get_waypoints().forEach((wp, i) => {
             const btn = document.getElementById('recordBtn');
             btn.innerText = isRecording ? "⏺ RECORDING..." : "START RECORDING";
             btn.classList.toggle('active', isRecording);
-            if (isRecording && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            if (isRecording && 'wakeLock' in navigator) {
+                try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+            }
         }
 
+        // --- Clear & Reset Layer Maintenance ---
         function clearRoute() {
             if(!confirm("Wipe all?")) return;
             points = []; waypoints = []; targetTCs = []; totalDist = 0; lastTriggeredTC = null;
             routeLine.setLatLngs([]);
-            map.eachLayer(l => { if((l instanceof L.Polyline && l !== routeLine) || (l instanceof L.Marker && l !== liveMarker)) map.removeLayer(l); });
+            
+            // Clean up custom circles alongside core track paths
+            map.eachLayer(l => { 
+                if((l instanceof L.Polyline && l !== routeLine) || (l instanceof L.CircleMarker && l !== liveMarker)) {
+                    map.removeLayer(l); 
+                } 
+            });
             localStorage.clear(); updateUI();
         }
 
