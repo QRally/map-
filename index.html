@@ -116,14 +116,24 @@
         }
 
         function dropTC() {
-            if (!isRecording) return alert("Start Recording first!");
-            const last = points[points.length - 1];
-            if (!last) return;
-            const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
-            waypoints.push(tc);
-            L.marker([tc.lat, tc.lon]).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
-            if (navigator.vibrate) navigator.vibrate(200);
-        }
+    if (!isRecording) return alert("Start Recording first!");
+    const last = points[points.length - 1];
+    if (!last) return;
+    
+    const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
+    waypoints.push(tc);
+
+    // Use a CircleMarker instead of a default Icon Marker
+    L.circleMarker([tc.lat, tc.lon], {
+        radius: 12,
+        fillColor: "#ff9800", // Match your orange TC button
+        color: "#fff",
+        weight: 3,
+        fillOpacity: 1
+    }).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
+
+    if (navigator.vibrate) navigator.vibrate(200);
+}
 
         // --- Player Logic (The "Geofence") ---
         function checkTCProximity(lat, lon) {
@@ -164,15 +174,20 @@
         }
 
         function importGPX(event) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                if(gpxLayer) map.removeLayer(gpxLayer);
-                targetTCs = [];
-                gpxLayer = new L.GPX(e.target.result, { async: true, polyline_options: { color: '#ff0000', weight: 6 } })
-                .on('loaded', function(e) {
-                    e.target.get_waypoints().forEach((wp, i) => {
-                        targetTCs.push({ id: i+1, lat: wp.getLatLng().lat, lon: wp.getLatLng().lng });
-                    });
+        function in importGPX:
+e.target.get_waypoints().forEach((wp, i) => {
+    const pos = wp.getLatLng();
+    targetTCs.push({ id: i+1, lat: pos.lat, lon: pos.lng });
+
+    // Draw the imported checkpoints as orange circles
+    L.circleMarker([pos.lat, pos.lon], {
+        radius: 12,
+        fillColor: "#ff9800",
+        color: "#000",
+        weight: 2,
+        fillOpacity: 0.8
+    }).addTo(map).bindPopup(wp.name || `TC ${i+1}`);
+});
                     map.fitBounds(e.target.getBounds());
                 }).addTo(map);
             };
