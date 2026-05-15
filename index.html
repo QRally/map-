@@ -6,38 +6,59 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#00ffcc">
-    <title>QRally v1.7 - TC Edition</title>
+    <title>Rally Route Master v1.6</title>
+    
     <link rel="manifest" href="manifest.json">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
         :root {
-            --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc;
-            --danger: #ff4444; --success: #28a745; --warning: #ff9800;
+            --bg: #f8f9fa;
+            --panel: #222222;
+            --accent: #00ffcc;
+            --danger: #ff4444;
+            --success: #28a745;
         }
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: -apple-system, sans-serif; }
-        #map { flex-grow: 1; width: 100%; }
+
+        html, body { 
+            height: 100%; margin: 0; padding: 0; overflow: hidden; 
+            display: flex; flex-direction: column; background: var(--bg); 
+            font-family: -apple-system, sans-serif; 
+        }
+
+        #map { flex-grow: 1; width: 100%; background: #ddd; }
+
         .ui-panel { 
-            flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom));
-            display: grid; grid-template-columns: 1fr; gap: 10px; 
+            flex-shrink: 0; padding: 15px; 
+            padding-bottom: calc(15px + env(safe-area-inset-bottom));
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; 
             background: var(--panel); border-top: 3px solid var(--accent);
+            box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
         }
+
         .stats { 
-            display: flex; justify-content: space-between; font-family: monospace; 
-            font-size: 20px; font-weight: bold; background: #000; 
-            color: var(--accent); padding: 12px; border-radius: 8px; border: 1px solid #444;
+            grid-column: span 3; display: flex; justify-content: space-between; 
+            font-family: monospace; font-size: 20px; font-weight: bold;
+            background: #000; color: var(--accent); padding: 12px; 
+            border-radius: 8px; margin-bottom: 5px; border: 1px solid #444;
         }
-        .action-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+
         button { 
             border: none; border-radius: 10px; color: white; font-weight: 800; 
-            text-transform: uppercase; cursor: pointer; touch-action: manipulation; 
+            font-size: 14px; text-transform: uppercase; cursor: pointer;
+            min-height: 65px; touch-action: manipulation; 
             border-bottom: 4px solid rgba(0,0,0,0.5);
         }
+
         button:active { transform: translateY(2px); border-bottom-width: 2px; }
-        .btn-record { min-height: 65px; background: var(--success); font-size: 18px; width: 100%; }
+
+        .btn-record { grid-column: span 3; background: var(--success); font-size: 18px; }
         .btn-record.active { background: var(--danger); animation: pulse 1s infinite; }
-        .btn-action { min-height: 60px; background: #555; font-size: 12px; }
-        .btn-tc { background: var(--warning); border-bottom-color: #e68900; }
+        .btn-action { background: #555; }
+        
         #fileInput { display: none; }
+
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
 </head>
@@ -46,19 +67,15 @@
     <div id="map"></div>
 
     <div class="ui-panel">
-        <div class="stats" id="stats-bar">
+        <div class="stats">
             <span id="stat-points">PTS: 0</span>
             <span id="stat-dist">0.00 km</span>
         </div>
         
         <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
-        
-        <div class="action-grid">
-            <button class="btn-action btn-tc" onclick="dropTC()">TC</button>
-            <button class="btn-action" onclick="document.getElementById('fileInput').click()">IN</button>
-            <button class="btn-action" onclick="downloadGPX()">SAVE</button>
-            <button class="btn-action" onclick="clearRoute()">CLR</button>
-        </div>
+        <button class="btn-action" onclick="document.getElementById('fileInput').click()">Import</button>
+        <button class="btn-action" onclick="downloadGPX()">Save</button>
+        <button class="btn-action" onclick="clearRoute()">Clear</button>
         
         <input type="file" id="fileInput" accept=".gpx" onchange="importGPX(event)">
     </div>
@@ -67,27 +84,49 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
 
     <script>
-        // --- PWA & Variables ---
+        // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.log('SW failed', err));
+            });
         }
 
-        let points = [], waypoints = [], targetTCs = [];
-        let totalDist = 0, isRecording = false, watchID = null, liveMarker = null, wakeLock = null, gpxLayer = null, lastTriggeredTC = null;
+        let points = [];
+        let totalDist = 0;
+        let isRecording = false;
+        let watchID = null;
+        let liveMarker = null;
+        let wakeLock = null;
+        let gpxLayer = null;
 
+        // Initialize Map
         const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
         let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.8}).addTo(map);
 
-        // --- GPS Engine ---
+        // Wake Lock Logic
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) { console.error("WakeLock Error:", err); }
+        }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        // GPS Engine
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
                 const { latitude, longitude } = pos.coords;
                 updateLiveMarker(latitude, longitude);
-                
-                // Active Player Mode: Check if we hit an imported Checkpoint
-                checkTCProximity(latitude, longitude);
-
                 if (isRecording) {
                     addPoint(latitude, longitude);
                     map.panTo([latitude, longitude]);
@@ -97,11 +136,13 @@
 
         function updateLiveMarker(lat, lng) {
             if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1, pane: 'markerPane' }).addTo(map);
+                liveMarker = L.circleMarker([lat, lng], { 
+                    radius: 10, fillColor: "#007bff", color: "#fff", 
+                    weight: 3, fillOpacity: 1, pane: 'markerPane' 
+                }).addTo(map);
             } else { liveMarker.setLatLng([lat, lng]); }
         }
 
-        // --- Editor Logic ---
         function addPoint(lat, lon) {
             const newPos = L.latLng(lat, lon);
             if (points.length > 0) {
@@ -115,91 +156,72 @@
             localStorage.setItem('rally_backup_dist', totalDist);
         }
 
-        function dropTC() {
-            if (!isRecording) return alert("Start Recording first!");
-            const last = points[points.length - 1];
-            if (!last) return;
-            const tc = { lat: last.lat, lon: last.lon, time: new Date().toISOString(), id: waypoints.length + 1 };
-            waypoints.push(tc);
-            L.marker([tc.lat, tc.lon]).addTo(map).bindPopup(`TC ${tc.id}`).openPopup();
-            if (navigator.vibrate) navigator.vibrate(200);
+        async function toggleRecording() {
+            const btn = document.getElementById('recordBtn');
+            isRecording = !isRecording;
+            btn.innerText = isRecording ? "⏺ Recording..." : "Start Recce Recording";
+            btn.classList.toggle('active', isRecording);
+            if (isRecording) await requestWakeLock();
+            else if (wakeLock) { wakeLock.release(); wakeLock = null; }
         }
 
-        // --- Player Logic (The "Geofence") ---
-        function checkTCProximity(lat, lon) {
-            if (targetTCs.length === 0) return;
-            const currentPos = L.latLng(lat, lon);
-            targetTCs.forEach(tc => {
-                if (lastTriggeredTC === tc.id) return;
-                if (currentPos.distanceTo(L.latLng(tc.lat, tc.lon)) < 30) {
-                    lastTriggeredTC = tc.id;
-                    triggerTCHit(tc);
-                }
-            });
-        }
-
-        function triggerTCHit(tc) {
-            if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
-            const bar = document.getElementById('stats-bar');
-            bar.style.color = "var(--warning)";
-            bar.innerHTML = `<span>CHECKPOINT REACHED</span><span>TC ${tc.id}</span>`;
-            setTimeout(() => { bar.style.color = "var(--accent)"; updateUI(); }, 5000);
-        }
-
-        // --- File & UI ---
         function updateUI() {
             document.getElementById('stat-points').innerText = `PTS: ${points.length}`;
             document.getElementById('stat-dist').innerText = `${totalDist.toFixed(2)} km`;
         }
 
         function downloadGPX() {
-            if(points.length < 2) return alert("No data.");
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="QRally" xmlns="http://www.topografix.com/GPX/1/1">`;
-            waypoints.forEach(wp => { gpx += `\n<wpt lat="${wp.lat}" lon="${wp.lon}"><name>TC ${wp.id}</name><time>${wp.time}</time></wpt>`; });
-            gpx += `\n<trk><trkseg>`;
-            points.forEach(p => gpx += `\n<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
-            gpx += `\n</trkseg></trk></gpx>`;
-            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gpx], {type:'application/gpx+xml'}));
-            a.download = `QRally_${Date.now()}.gpx`; a.click();
+            if(points.length < 2) return alert("No data to save.");
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
+            points.forEach(p => gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
+            gpx += `</trkseg></trk></gpx>`;
+            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `route_${Date.now()}.gpx`;
+            a.click();
         }
 
         function importGPX(event) {
+            const file = event.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 if(gpxLayer) map.removeLayer(gpxLayer);
-                targetTCs = [];
-                gpxLayer = new L.GPX(e.target.result, { async: true, polyline_options: { color: '#ff0000', weight: 6 } })
-                .on('loaded', function(e) {
-                    e.target.get_waypoints().forEach((wp, i) => {
-                        targetTCs.push({ id: i+1, lat: wp.getLatLng().lat, lon: wp.getLatLng().lng });
-                    });
+                gpxLayer = new L.GPX(e.target.result, {
+                    async: true,
+                    polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
+                    marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
+                }).on('loaded', function(e) {
                     map.fitBounds(e.target.getBounds());
                 }).addTo(map);
             };
-            reader.readAsText(event.target.files[0]);
-        }
-
-        async function toggleRecording() {
-            isRecording = !isRecording;
-            const btn = document.getElementById('recordBtn');
-            btn.innerText = isRecording ? "⏺ RECORDING..." : "START RECCE RECORDING";
-            btn.classList.toggle('active', isRecording);
-            if (isRecording && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            reader.readAsText(file);
         }
 
         function clearRoute() {
-            if(!confirm("Wipe all?")) return;
-            points = []; waypoints = []; targetTCs = []; totalDist = 0; lastTriggeredTC = null;
+            if(!confirm("Clear everything?")) return;
+            points = []; totalDist = 0;
             routeLine.setLatLngs([]);
-            map.eachLayer(l => { if((l instanceof L.Polyline && l !== routeLine) || (l instanceof L.Marker && l !== liveMarker)) map.removeLayer(l); });
-            localStorage.clear(); updateUI();
+            map.eachLayer((l) => { if(l instanceof L.Polyline && l !== routeLine) map.removeLayer(l); });
+            localStorage.removeItem('rally_backup_points');
+            localStorage.removeItem('rally_backup_dist');
+            updateUI();
         }
 
         function checkRecoveryData() {
-            const p = localStorage.getItem('rally_backup_points');
-            if (p && JSON.parse(p).length > 0 && confirm("Restore session?")) {
-                points = JSON.parse(p); totalDist = parseFloat(localStorage.getItem('rally_backup_dist'));
-                routeLine.setLatLngs(points.map(pt => [pt.lat, pt.lon])); updateUI();
+            const savedPoints = localStorage.getItem('rally_backup_points');
+            const savedDist = localStorage.getItem('rally_backup_dist');
+            if (savedPoints && JSON.parse(savedPoints).length > 0) {
+                if (confirm("Restore unsaved session?")) {
+                    points = JSON.parse(savedPoints);
+                    totalDist = parseFloat(savedDist);
+                    routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
+                    updateUI();
+                } else {
+                    localStorage.removeItem('rally_backup_points');
+                    localStorage.removeItem('rally_backup_dist');
+                }
             }
         }
     </script>
