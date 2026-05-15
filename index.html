@@ -51,7 +51,7 @@
             <span id="stat-dist">0.00 km</span>
         </div>
         
-        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
+        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recording</button>
         
         <div class="action-grid">
             <button class="btn-action btn-tc" onclick="dropTC()">TC</button>
@@ -182,7 +182,7 @@
         async function toggleRecording() {
             isRecording = !isRecording;
             const btn = document.getElementById('recordBtn');
-            btn.innerText = isRecording ? "⏺ RECORDING..." : "START RECCE RECORDING";
+            btn.innerText = isRecording ? "⏺ RECORDING..." : "START RECORDING";
             btn.classList.toggle('active', isRecording);
             if (isRecording && 'wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
         }
