@@ -6,123 +6,58 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#00ffcc">
-    <title>Rally Route Master v1.6</title>
-    
+    <title>Rally Route Master v1.6.1</title>
     <link rel="manifest" href="manifest.json">
-    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
     <style>
-        :root {
-            --bg: #f8f9fa;
-            --panel: #222222;
-            --accent: #00ffcc;
-            --danger: #ff4444;
-            --success: #28a745;
-        }
-
-        html, body { 
-            height: 100%; margin: 0; padding: 0; overflow: hidden; 
-            display: flex; flex-direction: column; background: var(--bg); 
-            font-family: -apple-system, sans-serif; 
-        }
-
+        :root { --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc; --danger: #ff4444; --success: #28a745; }
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: -apple-system, sans-serif; }
         #map { flex-grow: 1; width: 100%; background: #ddd; }
-
-        .ui-panel { 
-            flex-shrink: 0; padding: 15px; 
-            padding-bottom: calc(15px + env(safe-area-inset-bottom));
-            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; 
-            background: var(--panel); border-top: 3px solid var(--accent);
-            box-shadow: 0 -5px 15px rgba(0,0,0,0.3);
-        }
-
-        .stats { 
-            grid-column: span 3; display: flex; justify-content: space-between; 
-            font-family: monospace; font-size: 20px; font-weight: bold;
-            background: #000; color: var(--accent); padding: 12px; 
-            border-radius: 8px; margin-bottom: 5px; border: 1px solid #444;
-        }
-
-        button { 
-            border: none; border-radius: 10px; color: white; font-weight: 800; 
-            font-size: 14px; text-transform: uppercase; cursor: pointer;
-            min-height: 65px; touch-action: manipulation; 
-            border-bottom: 4px solid rgba(0,0,0,0.5);
-        }
-
+        .ui-panel { flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; background: var(--panel); border-top: 3px solid var(--accent); box-shadow: 0 -5px 15px rgba(0,0,0,0.3); }
+        .stats { grid-column: span 3; display: flex; justify-content: space-between; font-family: monospace; font-size: 20px; font-weight: bold; background: #000; color: var(--accent); padding: 12px; border-radius: 8px; margin-bottom: 5px; border: 1px solid #444; }
+        button { border: none; border-radius: 10px; color: white; font-weight: 800; font-size: 14px; text-transform: uppercase; cursor: pointer; min-height: 65px; touch-action: manipulation; border-bottom: 4px solid rgba(0,0,0,0.5); }
         button:active { transform: translateY(2px); border-bottom-width: 2px; }
-
         .btn-record { grid-column: span 3; background: var(--success); font-size: 18px; }
         .btn-record.active { background: var(--danger); animation: pulse 1s infinite; }
         .btn-action { background: #555; }
-        
         #fileInput { display: none; }
-
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
     </style>
 </head>
 <body onload="checkRecoveryData()">
-
     <div id="map"></div>
-
     <div class="ui-panel">
         <div class="stats">
             <span id="stat-points">PTS: 0</span>
             <span id="stat-dist">0.00 km</span>
         </div>
-        
         <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
         <button class="btn-action" onclick="document.getElementById('fileInput').click()">Import</button>
         <button class="btn-action" onclick="downloadGPX()">Save</button>
         <button class="btn-action" onclick="clearRoute()">Clear</button>
-        
         <input type="file" id="fileInput" accept=".gpx" onchange="importGPX(event)">
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
-
     <script>
-        // PWA Service Worker Registration
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').catch(err => console.log('SW failed', err));
             });
         }
 
-        let points = [];
-        let totalDist = 0;
-        let isRecording = false;
-        let watchID = null;
-        let liveMarker = null;
-        let wakeLock = null;
-        let gpxLayer = null;
+        let points = [], totalDist = 0, isRecording = false, liveMarker = null, wakeLock = null, gpxLayer = null;
 
-        // Initialize Map
         const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap'
-        }).addTo(map);
-
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.8}).addTo(map);
 
-        // Wake Lock Logic
         async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                }
-            } catch (err) { console.error("WakeLock Error:", err); }
+            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
+            catch (err) { console.error("WakeLock Error:", err); }
         }
 
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await requestWakeLock();
-            }
-        });
-
-        // GPS Engine
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
                 const { latitude, longitude } = pos.coords;
@@ -136,10 +71,7 @@
 
         function updateLiveMarker(lat, lng) {
             if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], { 
-                    radius: 10, fillColor: "#007bff", color: "#fff", 
-                    weight: 3, fillOpacity: 1, pane: 'markerPane' 
-                }).addTo(map);
+                liveMarker = L.circleMarker([lat, lng], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1, pane: 'markerPane' }).addTo(map);
             } else { liveMarker.setLatLng([lat, lng]); }
         }
 
@@ -157,12 +89,11 @@
         }
 
         async function toggleRecording() {
-            const btn = document.getElementById('recordBtn');
             isRecording = !isRecording;
+            const btn = document.getElementById('recordBtn');
             btn.innerText = isRecording ? "⏺ Recording..." : "Start Recce Recording";
             btn.classList.toggle('active', isRecording);
             if (isRecording) await requestWakeLock();
-            else if (wakeLock) { wakeLock.release(); wakeLock = null; }
         }
 
         function updateUI() {
@@ -175,53 +106,42 @@
             let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
             points.forEach(p => gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
             gpx += `</trkseg></trk></gpx>`;
-            const blob = new Blob([gpx], { type: 'application/gpx+xml' });
             const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
+            a.href = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' }));
             a.download = `route_${Date.now()}.gpx`;
             a.click();
         }
 
         function importGPX(event) {
-            const file = event.target.files[0];
-            if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 if(gpxLayer) map.removeLayer(gpxLayer);
                 gpxLayer = new L.GPX(e.target.result, {
-                    async: true,
-                    polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
+                    async: true, polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
                     marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
-                }).on('loaded', function(e) {
-                    map.fitBounds(e.target.getBounds());
-                }).addTo(map);
+                }).on('loaded', function(e) { map.fitBounds(e.target.getBounds()); }).addTo(map);
             };
-            reader.readAsText(file);
+            reader.readAsText(event.target.files[0]);
         }
 
         function clearRoute() {
             if(!confirm("Clear everything?")) return;
             points = []; totalDist = 0;
             routeLine.setLatLngs([]);
-            map.eachLayer((l) => { if(l instanceof L.Polyline && l !== routeLine) map.removeLayer(l); });
-            localStorage.removeItem('rally_backup_points');
-            localStorage.removeItem('rally_backup_dist');
+            if(gpxLayer) map.removeLayer(gpxLayer); // FIXED: Clears imported routes too
+            localStorage.clear();
             updateUI();
         }
 
         function checkRecoveryData() {
             const savedPoints = localStorage.getItem('rally_backup_points');
-            const savedDist = localStorage.getItem('rally_backup_dist');
             if (savedPoints && JSON.parse(savedPoints).length > 0) {
                 if (confirm("Restore unsaved session?")) {
                     points = JSON.parse(savedPoints);
-                    totalDist = parseFloat(savedDist);
+                    totalDist = parseFloat(localStorage.getItem('rally_backup_dist'));
                     routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
                     updateUI();
-                } else {
-                    localStorage.removeItem('rally_backup_points');
-                    localStorage.removeItem('rally_backup_dist');
-                }
+                } else { localStorage.clear(); }
             }
         }
     </script>
