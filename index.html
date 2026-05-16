@@ -6,15 +6,16 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#00ffcc">
-    <title>Rally Route Master v1.6.1</title>
+    <title>Rally Route Master v1.7.0</title>
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc; --danger: #ff4444; --success: #28a745; }
+        :root { --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc; --danger: #ff4444; --success: #28a745; --warning: #ffc107; }
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: -apple-system, sans-serif; }
         #map { flex-grow: 1; width: 100%; background: #ddd; }
         .ui-panel { flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; background: var(--panel); border-top: 3px solid var(--accent); box-shadow: 0 -5px 15px rgba(0,0,0,0.3); }
         .stats { grid-column: span 3; display: flex; justify-content: space-between; font-family: monospace; font-size: 20px; font-weight: bold; background: #000; color: var(--accent); padding: 12px; border-radius: 8px; margin-bottom: 5px; border: 1px solid #444; }
+        .stat-warning { color: var(--warning); font-size: 12px; display: block; }
         button { border: none; border-radius: 10px; color: white; font-weight: 800; font-size: 14px; text-transform: uppercase; cursor: pointer; min-height: 65px; touch-action: manipulation; border-bottom: 4px solid rgba(0,0,0,0.5); }
         button:active { transform: translateY(2px); border-bottom-width: 2px; }
         .btn-record { grid-column: span 3; background: var(--success); font-size: 18px; }
@@ -30,6 +31,7 @@
         <div class="stats">
             <span id="stat-points">PTS: 0</span>
             <span id="stat-dist">0.00 km</span>
+            <span id="stat-accuracy"></span>
         </div>
         <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
         <button class="btn-action" onclick="document.getElementById('fileInput').click()">Import</button>
@@ -43,49 +45,132 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => console.log('SW failed', err));
+                navigator.serviceWorker.register('sw.js').catch(err => {
+                    console.warn('Service Worker registration failed:', err);
+                    console.log('App will work online but without offline capability');
+                });
             });
         }
 
         let points = [], totalDist = 0, isRecording = false, liveMarker = null, wakeLock = null, gpxLayer = null;
+        const MAX_JUMP_DISTANCE = 0.1; // km - reject unrealistic GPS jumps
+        const ACCURACY_THRESHOLD = 50; // meters - warn if accuracy is poor
 
         const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.8}).addTo(map);
 
         async function requestWakeLock() {
-            try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
-            catch (err) { console.error("WakeLock Error:", err); }
+            try { 
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); 
+            } 
+            catch (err) { 
+                console.error("WakeLock Error:", err); 
+            }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) {
+                try {
+                    await wakeLock.release();
+                    wakeLock = null;
+                    console.log('Wake Lock released');
+                } catch (err) {
+                    console.error("WakeLock release error:", err);
+                }
+            }
         }
 
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
-                const { latitude, longitude } = pos.coords;
-                updateLiveMarker(latitude, longitude);
+                const { latitude, longitude, accuracy, altitude } = pos.coords;
+                updateLiveMarker(latitude, longitude, accuracy);
+                updateAccuracyDisplay(accuracy);
                 if (isRecording) {
-                    addPoint(latitude, longitude);
+                    addPoint(latitude, longitude, altitude, accuracy);
                     map.panTo([latitude, longitude]);
                 }
-            }, (err) => console.error(err), { enableHighAccuracy: true, maximumAge: 0 });
+            }, (err) => {
+                console.error("Geolocation error:", err);
+                updateAccuracyDisplay(null, err.message);
+            }, { 
+                enableHighAccuracy: true, 
+                maximumAge: 0,
+                timeout: 10000
+            });
         }
 
-        function updateLiveMarker(lat, lng) {
+        function updateLiveMarker(lat, lng, accuracy) {
             if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], { radius: 10, fillColor: "#007bff", color: "#fff", weight: 3, fillOpacity: 1, pane: 'markerPane' }).addTo(map);
-            } else { liveMarker.setLatLng([lat, lng]); }
+                liveMarker = L.circleMarker([lat, lng], { 
+                    radius: 10, 
+                    fillColor: "#007bff", 
+                    color: "#fff", 
+                    weight: 3, 
+                    fillOpacity: 1, 
+                    pane: 'markerPane' 
+                }).addTo(map);
+            } else { 
+                liveMarker.setLatLng([lat, lng]); 
+            }
         }
 
-        function addPoint(lat, lon) {
+        function updateAccuracyDisplay(accuracy, error = null) {
+            const accuracyEl = document.getElementById('stat-accuracy');
+            if (error) {
+                accuracyEl.innerHTML = `<span class="stat-warning">⚠ ${error}</span>`;
+            } else if (accuracy) {
+                const color = accuracy > ACCURACY_THRESHOLD ? 'var(--warning)' : 'var(--accent)';
+                accuracyEl.innerHTML = `<span style="color: ${color}">±${accuracy.toFixed(0)}m</span>`;
+            } else {
+                accuracyEl.innerHTML = '';
+            }
+        }
+
+        function addPoint(lat, lon, ele = null, accuracy = null) {
             const newPos = L.latLng(lat, lon);
             if (points.length > 0) {
-                const lastPos = L.latLng(points[points.length-1].lat, points[points.length-1].lon);
-                totalDist += lastPos.distanceTo(newPos) / 1000;
+                // EXFIX: Force float casting to avoid string evaluation issues within distance calculations
+                const lastLat = parseFloat(points[points.length-1].lat);
+                const lastLon = parseFloat(points[points.length-1].lon);
+                const lastPos = L.latLng(lastLat, lastLon);
+                const distance = lastPos.distanceTo(newPos) / 1000; 
+                
+                if (distance > MAX_JUMP_DISTANCE) {
+                    console.warn(`GPS jump detected: ${distance.toFixed(3)}km, ignoring point`);
+                    return;
+                }
+                
+                totalDist += distance;
             }
-            points.push({lat: lat.toFixed(6), lon: lon.toFixed(6)});
+            
+            const point = {
+                lat: lat.toFixed(6), 
+                lon: lon.toFixed(6)
+            };
+            
+            if (ele !== null && ele !== undefined) {
+                point.ele = ele.toFixed(1);
+            }
+            
+            if (accuracy !== null && accuracy !== undefined) {
+                point.accuracy = accuracy.toFixed(1);
+            }
+            
+            points.push(point);
             routeLine.addLatLng(newPos);
             updateUI();
-            localStorage.setItem('rally_backup_points', JSON.stringify(points));
-            localStorage.setItem('rally_backup_dist', totalDist);
+            saveToLocalStorage();
+        }
+
+        function saveToLocalStorage() {
+            try {
+                localStorage.setItem('rally_backup_points', JSON.stringify(points));
+                localStorage.setItem('rally_backup_dist', totalDist.toString());
+            } catch (e) {
+                console.warn('Storage quota exceeded or unavailable:', e);
+                alert('Warning: Could not save backup. Storage may be full.');
+            }
         }
 
         async function toggleRecording() {
@@ -93,7 +178,12 @@
             const btn = document.getElementById('recordBtn');
             btn.innerText = isRecording ? "⏺ Recording..." : "Start Recce Recording";
             btn.classList.toggle('active', isRecording);
-            if (isRecording) await requestWakeLock();
+            
+            if (isRecording) {
+                await requestWakeLock();
+            } else {
+                await releaseWakeLock();
+            }
         }
 
         function updateUI() {
@@ -103,9 +193,19 @@
 
         function downloadGPX() {
             if(points.length < 2) return alert("No data to save.");
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM" xmlns="http://www.topografix.com/GPX/1/1"><trk><trkseg>`;
-            points.forEach(p => gpx += `<trkpt lat="${p.lat}" lon="${p.lon}"></trkpt>`);
+            
+            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM v1.7.0" xmlns="http://www.topografix.com/GPX/1/1">`;
+            gpx += `<metadata><time>${new Date().toISOString()}</time></metadata>`;
+            gpx += `<trk><name>Rally Route</name><trkseg>`;
+            
+            points.forEach(p => {
+                gpx += `<trkpt lat="${p.lat}" lon="${p.lon}">`;
+                if (p.ele) gpx += `<ele>${p.ele}</ele>`;
+                gpx += `</trkpt>`;
+            });
+            
             gpx += `</trkseg></trk></gpx>`;
+            
             const a = document.createElement('a');
             a.href = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' }));
             a.download = `route_${Date.now()}.gpx`;
@@ -113,37 +213,94 @@
         }
 
         function importGPX(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (!file.name.toLowerCase().endsWith('.gpx')) {
+                alert('Error: Only .gpx files are allowed');
+                event.target.value = '';
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = function(e) {
-                if(gpxLayer) map.removeLayer(gpxLayer);
-                gpxLayer = new L.GPX(e.target.result, {
-                    async: true, polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
-                    marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
-                }).on('loaded', function(e) { map.fitBounds(e.target.getBounds()); }).addTo(map);
+                try {
+                    if(gpxLayer) map.removeLayer(gpxLayer);
+                    gpxLayer = new L.GPX(e.target.result, {
+                        async: true, 
+                        polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
+                        marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
+                    }).on('loaded', function(e) { 
+                        map.fitBounds(e.target.getBounds()); 
+                    }).on('error', function(err) {
+                        console.error('GPX parsing error:', err);
+                        alert('Error: Invalid GPX file');
+                    }).addTo(map);
+                } catch (err) {
+                    console.error('Error loading GPX:', err);
+                    alert('Error: Could not load GPX file');
+                }
             };
-            reader.readAsText(event.target.files[0]);
+            reader.onerror = function() {
+                alert('Error: Could not read file');
+            };
+            reader.readAsText(file);
         }
 
         function clearRoute() {
             if(!confirm("Clear everything?")) return;
-            points = []; totalDist = 0;
+            points = []; 
+            totalDist = 0;
             routeLine.setLatLngs([]);
-            if(gpxLayer) map.removeLayer(gpxLayer); // FIXED: Clears imported routes too
-            localStorage.clear();
+            if(gpxLayer) map.removeLayer(gpxLayer);
+            
+            // EXFIX: Cleaned targeted keys to preserve non-app local storage records
+            try {
+                localStorage.removeItem('rally_backup_points');
+                localStorage.removeItem('rally_backup_dist');
+            } catch (e) {
+                console.warn('Could not clear local storage items:', e);
+            }
             updateUI();
         }
 
         function checkRecoveryData() {
-            const savedPoints = localStorage.getItem('rally_backup_points');
-            if (savedPoints && JSON.parse(savedPoints).length > 0) {
-                if (confirm("Restore unsaved session?")) {
-                    points = JSON.parse(savedPoints);
-                    totalDist = parseFloat(localStorage.getItem('rally_backup_dist'));
-                    routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
-                    updateUI();
-                } else { localStorage.clear(); }
+            try {
+                const savedPoints = localStorage.getItem('rally_backup_points');
+                if (savedPoints) {
+                    const parsedPoints = JSON.parse(savedPoints);
+                    if (parsedPoints && parsedPoints.length > 0) {
+                        if (confirm("Restore unsaved session?")) {
+                            points = parsedPoints;
+                            totalDist = parseFloat(localStorage.getItem('rally_backup_dist')) || 0;
+                            
+                            // EXFIX: Correctly map custom saved property objects into nested Leaflet-compatible numeric arrays [lat, lng]
+                            const latLngArray = points.map(p => [parseFloat(p.lat), parseFloat(p.lon)]);
+                            routeLine.setLatLngs(latLngArray);
+                            
+                            updateUI();
+                            if(latLngArray.length > 0) {
+                                map.fitBounds(routeLine.getBounds());
+                            }
+                        } else { 
+                            localStorage.removeItem('rally_backup_points');
+                            localStorage.removeItem('rally_backup_dist');
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error checking recovery data:', e);
             }
         }
+
+        // EXFIX: Synchronous fallback execution for document unloads. 
+        // WakeLock release cannot safely expect async/await execution inside beforeunload.
+        window.addEventListener('beforeunload', () => {
+            if (wakeLock) {
+                wakeLock.release().catch(err => console.error("Synchronous cleanup warning:", err));
+                wakeLock = null;
+            }
+        });
     </script>
 </body>
 </html>
