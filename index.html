@@ -443,7 +443,6 @@
         let liveMarker = null;
         let currentPos = null;
         let wakeLock = null;
-        let markersGroup = null;
         let currentTileLayer = null;
         let isSatellite = false;
 
@@ -452,6 +451,16 @@
         // Leaflet Map Initialization
         const map = L.map('map', { zoomControl: false }).setView([52.4112, -3.7245], 13);
         
+        // Initialize Route Polyline and Markers FIRST so they exist before any function calls
+        const routeLine = L.polyline([], {
+            color: '#00ffcc',
+            weight: 6,
+            opacity: 0.9,
+            lineJoin: 'round'
+        }).addTo(map);
+
+        const markersGroup = L.layerGroup().addTo(map);
+
         // 100% Reliable Map Tile Providers (NO API KEY REQUIRED)
         const TILE_PROVIDERS = {
             street: {
@@ -476,7 +485,9 @@
                 maxZoom: config.maxZoom
             }).addTo(map);
 
-            if (routeLine) routeLine.bringToFront();
+            if (routeLine) {
+                routeLine.bringToFront();
+            }
         }
 
         // Initialize with high-reliability OpenStreetMap tiles
@@ -492,15 +503,6 @@
                     : '<span>🛰</span> <span class="btn-text">Sat</span>';
             }
         }
-
-        let routeLine = L.polyline([], {
-            color: '#00ffcc',
-            weight: 6,
-            opacity: 0.9,
-            lineJoin: 'round'
-        }).addTo(map);
-
-        markersGroup = L.layerGroup().addTo(map);
 
         function haversine(lat1, lon1, lat2, lon2) {
             const R = 6371;
