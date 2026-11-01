@@ -42,9 +42,10 @@
             flex-grow: 1;
             width: 100%;
             background: #1e293b;
+            position: relative;
         }
 
-        /* Top Header Bar - Optimized for Mobile Viewports */
+        /* Top Header Bar */
         .rally-header {
             flex-shrink: 0;
             display: flex;
@@ -55,7 +56,7 @@
             padding: 8px 12px;
             border-bottom: 1px solid var(--panel-border);
             z-index: 1000;
-            gap: 6px;
+            gap: 5px;
             min-height: 50px;
         }
         .rally-brand {
@@ -77,14 +78,14 @@
         .header-actions {
             display: flex;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
             flex-shrink: 0;
         }
         .btn-header {
             background: #1f2937;
             color: #f3f4f6;
             border: 1px solid #374151;
-            padding: 6px 10px;
+            padding: 6px 8px;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 700;
@@ -92,7 +93,7 @@
             transition: all 0.15s ease;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
             white-space: nowrap;
             min-height: 36px;
             touch-action: manipulation;
@@ -101,6 +102,21 @@
             background: #374151;
             color: #fff;
         }
+        .btn-sim {
+            background: rgba(0, 255, 204, 0.15);
+            color: var(--accent);
+            border-color: rgba(0, 255, 204, 0.4);
+        }
+        .btn-sim.active {
+            background: var(--warning);
+            color: #000;
+            border-color: #fde047;
+            animation: pulse-sim 1s infinite alternate;
+        }
+        @keyframes pulse-sim {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.05); }
+        }
         .btn-header.btn-clear {
             color: #fca5a5;
             border-color: rgba(239, 68, 68, 0.3);
@@ -108,6 +124,33 @@
         .btn-header.btn-clear:hover {
             background: rgba(239, 68, 68, 0.2);
             color: #f87171;
+        }
+
+        /* Floating Upcoming Rally Note HUD Banner */
+        .upcoming-hud {
+            position: absolute;
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            width: calc(100% - 20px);
+            max-width: 440px;
+            background: rgba(11, 15, 23, 0.96);
+            border: 2px solid var(--accent);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 15px rgba(0, 255, 204, 0.3);
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+            pointer-events: auto;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .upcoming-hud.immediate {
+            border-color: #f59e0b;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.9), 0 0 25px rgba(245, 158, 11, 0.5);
         }
 
         /* Co-Driver Tripmeter & Cockpit Panel */
@@ -259,7 +302,7 @@
             100% { opacity: 1; }
         }
 
-        /* Rally Flag Leaflet Marker CSS */
+        /* Rally Flag Leaflet Marker Base */
         .rally-flag-marker {
             background: transparent;
             border: none;
@@ -275,13 +318,38 @@
             white-space: nowrap;
             box-shadow: 0 4px 10px rgba(0,0,0,0.7);
             border: 1px solid rgba(255,255,255,0.4);
-            transform: translateY(-50%);
-            transition: transform 0.15s ease;
+            transform: translateY(-50%) scale(1);
+            transform-origin: center bottom;
+            transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease, opacity 0.25s ease;
         }
         .flag-box:hover {
-            transform: translateY(-50%) scale(1.15);
+            transform: translateY(-50%) scale(1.2);
             z-index: 1000 !important;
         }
+
+        /* DYNAMIC ROAD APPROACH ENLARGEMENT */
+        .flag-box.flag-approaching {
+            transform: translateY(-50%) scale(1.45) !important;
+            box-shadow: 0 0 18px rgba(0, 255, 204, 0.95), 0 8px 18px rgba(0,0,0,0.85) !important;
+            border: 2px solid #00ffcc !important;
+            z-index: 1500 !important;
+        }
+        .flag-box.flag-immediate {
+            transform: translateY(-50%) scale(1.9) !important;
+            box-shadow: 0 0 28px rgba(251, 191, 36, 1), 0 10px 24px rgba(0,0,0,0.9) !important;
+            border: 2.5px solid #ffffff !important;
+            z-index: 2500 !important;
+            animation: flag-pulse 0.7s infinite alternate !important;
+        }
+        .flag-box.flag-passed {
+            opacity: 0.45 !important;
+            transform: translateY(-50%) scale(0.9) !important;
+        }
+        @keyframes flag-pulse {
+            0% { transform: translateY(-50%) scale(1.85); }
+            100% { transform: translateY(-50%) scale(2.05); }
+        }
+
         .flag-start { background: #059669; color: #fff; border-color: #34d399; }
         .flag-finish { background: #000; color: #fff; border-color: #fff; }
         .flag-tc { background: #f59e0b; color: #000; border-color: #fef08a; }
@@ -327,6 +395,9 @@
             <span class="brand-title">Rally Route Master</span>
         </div>
         <div class="header-actions">
+            <button class="btn-header btn-sim" onclick="toggleSimDrive()" id="simDriveBtn" title="Simulate driving route to test waypoint scaling & audio chimes">
+                <span id="simIcon">🚗</span> <span class="btn-text">Sim</span>
+            </button>
             <button class="btn-header" onclick="toggleMapLayer()" id="layerToggleBtn" title="Toggle between Street Map & Satellite Imagery">
                 <span id="layerIcon">🛰</span> <span class="btn-text">Sat</span>
             </button>
@@ -343,7 +414,22 @@
     </header>
 
     <!-- Leaflet Map Container -->
-    <div id="map"></div>
+    <div id="map">
+        <!-- Floating Upcoming Pace Note HUD (Appears when approaching notes) -->
+        <div id="upcomingHud" class="upcoming-hud" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                <span id="hudIcon" style="font-size: 22px; line-height: 1;">⚠</span>
+                <div style="min-width: 0;">
+                    <div id="hudName" style="font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Upcoming Note</div>
+                    <div id="hudDesc" style="font-size: 10px; color: #9ca3af; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Next Pace Note</div>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                <div id="hudDist" style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 800; color: #00ffcc; background: #000; padding: 3px 8px; border-radius: 6px; border: 1px solid #334155; line-height: 1.1;">--m</div>
+                <button onclick="toggleHudSound()" id="soundToggleBtn" style="background: #1f2937; border: 1px solid #374151; color: #fff; border-radius: 6px; padding: 4px 6px; font-size: 11px; cursor: pointer;" title="Toggle Approach Audio Tone">🔊</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Co-Driver Cockpit & Tripmeter Panel -->
     <footer class="ui-panel">
@@ -445,13 +531,16 @@
         let wakeLock = null;
         let currentTileLayer = null;
         let isSatellite = false;
+        let waypointMarkers = [];
+        let soundEnabled = true;
+        let lastChimedWptId = null;
 
         const MAX_JUMP_KM = 0.15;
 
         // Leaflet Map Initialization
         const map = L.map('map', { zoomControl: false }).setView([52.4112, -3.7245], 13);
         
-        // Initialize Route Polyline and Markers FIRST so they exist before any function calls
+        // Initialize Route Polyline and Markers FIRST
         const routeLine = L.polyline([], {
             color: '#00ffcc',
             weight: 6,
@@ -514,36 +603,31 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
+        function getWptSymbol(type) {
+            const t = (type || '').toLowerCase();
+            if (t.includes('start')) return '🚩';
+            if (t.includes('finish')) return '🏁';
+            if (t.includes('tc') || t.includes('control')) return '⏱';
+            if (t.includes('caution') || t.includes('hazard') || t.includes('danger')) return '⚠';
+            if (t.includes('jump')) return '⏫';
+            if (t.includes('water')) return '🌊';
+            if (t.includes('hairpin')) return '↩';
+            return '📍';
+        }
+
         function createFlagIcon(type, label) {
             let cls = 'flag-wpt';
-            let iconSvg = '';
             const t = (type || '').toLowerCase();
 
-            if (t.includes('start')) {
-                cls = 'flag-start';
-                iconSvg = '🚩';
-            } else if (t.includes('finish')) {
-                cls = 'flag-finish';
-                iconSvg = '🏁';
-            } else if (t.includes('tc') || t.includes('control')) {
-                cls = 'flag-tc';
-                iconSvg = '⏱';
-            } else if (t.includes('caution') || t.includes('hazard') || t.includes('danger')) {
-                cls = 'flag-caution';
-                iconSvg = '⚠';
-            } else if (t.includes('jump')) {
-                cls = 'flag-tc';
-                iconSvg = '⏫';
-            } else if (t.includes('water')) {
-                cls = 'flag-wpt';
-                iconSvg = '🌊';
-            } else if (t.includes('hairpin')) {
-                cls = 'flag-caution';
-                iconSvg = '↩';
-            } else {
-                iconSvg = '📍';
-            }
+            if (t.includes('start')) cls = 'flag-start';
+            else if (t.includes('finish')) cls = 'flag-finish';
+            else if (t.includes('tc') || t.includes('control')) cls = 'flag-tc';
+            else if (t.includes('caution') || t.includes('hazard') || t.includes('danger')) cls = 'flag-caution';
+            else if (t.includes('jump')) cls = 'flag-tc';
+            else if (t.includes('water')) cls = 'flag-wpt';
+            else if (t.includes('hairpin')) cls = 'flag-caution';
 
+            const iconSvg = getWptSymbol(type);
             const html = `<div class="flag-box ${cls}"><span>${iconSvg}</span><span>${label}</span></div>`;
             return L.divIcon({
                 className: 'rally-flag-marker',
@@ -556,6 +640,8 @@
 
         function renderWaypoints() {
             markersGroup.clearLayers();
+            waypointMarkers = [];
+
             waypoints.forEach((wpt, index) => {
                 const marker = L.marker([wpt.lat, wpt.lon], {
                     icon: createFlagIcon(wpt.type, wpt.name)
@@ -573,6 +659,7 @@
                 `;
                 marker.bindPopup(popupHtml);
                 markersGroup.addLayer(marker);
+                waypointMarkers.push({ waypoint: wpt, marker: marker });
             });
         }
 
@@ -582,12 +669,178 @@
             saveBackup();
         }
 
+        // APPROACH AUDIO TONES (Synthesized Web Audio)
+        function toggleHudSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundToggleBtn');
+            if (btn) btn.innerText = soundEnabled ? '🔊' : '🔇';
+        }
+
+        function playApproachChime(isImmediate) {
+            if (!soundEnabled) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type = isImmediate ? 'sine' : 'triangle';
+                osc.frequency.setValueAtTime(isImmediate ? 880 : 587.33, ctx.currentTime);
+                gain.gain.setValueAtTime(0.12, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + (isImmediate ? 0.22 : 0.15));
+                osc.start();
+                osc.stop(ctx.currentTime + (isImmediate ? 0.22 : 0.15));
+            } catch(e) {}
+        }
+
+        // PROXIMITY SCALING & UPCOMING NOTE HUD
+        function updateProximityScaling(carLat, carLon) {
+            if (!waypoints || waypoints.length === 0) {
+                hideUpcomingHud();
+                return;
+            }
+
+            let nearestUpcoming = null;
+            let minUpcomingDist = Infinity;
+
+            waypointMarkers.forEach(({ waypoint: wpt, marker }) => {
+                const dMeters = Math.round(haversine(carLat, carLon, wpt.lat, wpt.lon) * 1000);
+                const el = marker.getElement();
+                const flagBox = el ? el.querySelector('.flag-box') : null;
+
+                // Has car passed this waypoint?
+                const isPassed = (totalDist > 0 && wpt.distFromStart !== undefined && totalDist > (wpt.distFromStart + 0.04) && dMeters > 30);
+
+                if (flagBox) {
+                    flagBox.classList.remove('flag-approaching', 'flag-immediate', 'flag-passed');
+                    if (isPassed) {
+                        flagBox.classList.add('flag-passed');
+                    } else if (dMeters <= 75) {
+                        flagBox.classList.add('flag-immediate');
+                    } else if (dMeters <= 220) {
+                        flagBox.classList.add('flag-approaching');
+                    }
+                }
+
+                // Check for upcoming waypoint within 450m
+                if (!isPassed && dMeters <= 450 && dMeters < minUpcomingDist) {
+                    minUpcomingDist = dMeters;
+                    nearestUpcoming = { wpt, dist: dMeters };
+                }
+            });
+
+            if (nearestUpcoming) {
+                showUpcomingHud(nearestUpcoming.wpt, nearestUpcoming.dist);
+
+                // Audio tone triggers
+                if (nearestUpcoming.dist <= 70 && lastChimedWptId !== ('imm-' + nearestUpcoming.wpt.id)) {
+                    lastChimedWptId = 'imm-' + nearestUpcoming.wpt.id;
+                    playApproachChime(true);
+                } else if (nearestUpcoming.dist <= 200 && lastChimedWptId !== ('near-' + nearestUpcoming.wpt.id)) {
+                    lastChimedWptId = 'near-' + nearestUpcoming.wpt.id;
+                    playApproachChime(false);
+                }
+            } else {
+                hideUpcomingHud();
+            }
+        }
+
+        function showUpcomingHud(wpt, distMeters) {
+            const hud = document.getElementById('upcomingHud');
+            if (!hud) return;
+            hud.style.display = 'flex';
+            hud.classList.toggle('immediate', distMeters <= 75);
+
+            document.getElementById('hudIcon').innerText = getWptSymbol(wpt.type);
+            document.getElementById('hudName').innerText = wpt.name;
+            document.getElementById('hudDesc').innerText = wpt.desc || (distMeters <= 40 ? 'NOW!' : 'Approaching note');
+
+            const distEl = document.getElementById('hudDist');
+            if (distMeters <= 40) {
+                distEl.innerText = 'NOW!';
+                distEl.style.color = '#f59e0b';
+            } else {
+                distEl.innerText = distMeters + 'm';
+                distEl.style.color = '#00ffcc';
+            }
+        }
+
+        function hideUpcomingHud() {
+            const hud = document.getElementById('upcomingHud');
+            if (hud) hud.style.display = 'none';
+        }
+
+        // SIMULATE RECCE DRIVE (Test On-Road Dynamics Without Leaving Desk)
+        let simInterval = null;
+        let simIndex = 0;
+
+        function toggleSimDrive() {
+            if (simInterval) {
+                stopSimDrive();
+                return;
+            }
+            if (points.length < 2) {
+                alert("Please import or record a route first to test drive.");
+                return;
+            }
+
+            simIndex = 0;
+            const btn = document.getElementById('simDriveBtn');
+            if (btn) {
+                btn.innerHTML = '<span>⏹</span> <span class="btn-text">Stop</span>';
+                btn.classList.add('active');
+            }
+
+            // Animate along route at recce speed (~60 km/h)
+            simInterval = setInterval(() => {
+                if (simIndex >= points.length) {
+                    stopSimDrive();
+                    return;
+                }
+
+                const pt = points[simIndex];
+                currentPos = { lat: pt.lat, lon: pt.lon };
+                updateLiveCarMarker(pt.lat, pt.lon);
+                updateProximityScaling(pt.lat, pt.lon);
+
+                if (pt.cumDist !== undefined) {
+                    totalDist = pt.cumDist;
+                    stageDist = pt.cumDist;
+                    intervalDist = pt.cumDist;
+                    updateCockpitUI();
+                }
+
+                map.panTo([pt.lat, pt.lon], { animate: false });
+                simIndex++;
+            }, 250);
+        }
+
+        function stopSimDrive() {
+            if (simInterval) {
+                clearInterval(simInterval);
+                simInterval = null;
+            }
+            const btn = document.getElementById('simDriveBtn');
+            if (btn) {
+                btn.innerHTML = '<span>🚗</span> <span class="btn-text">Sim</span>';
+                btn.classList.remove('active');
+            }
+            hideUpcomingHud();
+        }
+
+        // Live Geolocation
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
+                // If sim drive is active, don't override with stationary GPS
+                if (simInterval) return;
+
                 const { latitude, longitude, accuracy, altitude } = pos.coords;
                 currentPos = { lat: latitude, lon: longitude };
                 updateLiveCarMarker(latitude, longitude);
                 updateGpsAccuracyDisplay(accuracy);
+                updateProximityScaling(latitude, longitude);
 
                 if (isRecording) {
                     recordGpsPoint(latitude, longitude, altitude, accuracy);
@@ -737,10 +990,11 @@
                 try {
                     parseAndLoadGPX(e.target.result);
                 } catch(err) {
-                    alert("Error parsing GPX file: " + err.message);
+                    alert("Error parsing GPX file: " + (err.message || err));
                 }
             };
             reader.readAsText(file);
+            event.target.value = '';
         }
 
         function parseAndLoadGPX(xmlText) {
@@ -845,7 +1099,9 @@
             }
 
             const latLngs = points.map(p => [p.lat, p.lon]);
-            routeLine.setLatLngs(latLngs);
+            if (routeLine) {
+                routeLine.setLatLngs(latLngs);
+            }
 
             stageDist = totalDist;
             intervalDist = totalDist;
@@ -896,14 +1152,16 @@
 
         function clearAllRoute() {
             if (!confirm("Clear current route, points, and all rally flags?")) return;
+            stopSimDrive();
             points = [];
             waypoints = [];
             totalDist = 0;
             stageDist = 0;
             intervalDist = 0;
-            routeLine.setLatLngs([]);
+            if (routeLine) routeLine.setLatLngs([]);
             markersGroup.clearLayers();
             updateCockpitUI();
+            hideUpcomingHud();
             localStorage.removeItem('rally_master_points');
             localStorage.removeItem('rally_master_wpts');
             localStorage.removeItem('rally_master_dist');
@@ -932,7 +1190,9 @@
                         stageDist = totalDist;
                         intervalDist = totalDist;
 
-                        routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
+                        if (routeLine) {
+                            routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
+                        }
                         renderWaypoints();
                         updateCockpitUI();
                         fitRouteBounds();
