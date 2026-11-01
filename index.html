@@ -5,302 +5,940 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#00ffcc">
-    <title>Rally Route Master v1.7.0</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0b0f17">
+    <title>Rally Route Master Pro</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
-        :root { --bg: #f8f9fa; --panel: #222222; --accent: #00ffcc; --danger: #ff4444; --success: #28a745; --warning: #ffc107; }
-        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); font-family: -apple-system, sans-serif; }
-        #map { flex-grow: 1; width: 100%; background: #ddd; }
-        .ui-panel { flex-shrink: 0; padding: 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom)); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; background: var(--panel); border-top: 3px solid var(--accent); box-shadow: 0 -5px 15px rgba(0,0,0,0.3); }
-        .stats { grid-column: span 3; display: flex; justify-content: space-between; font-family: monospace; font-size: 20px; font-weight: bold; background: #000; color: var(--accent); padding: 12px; border-radius: 8px; margin-bottom: 5px; border: 1px solid #444; }
-        .stat-warning { color: var(--warning); font-size: 12px; display: block; }
-        button { border: none; border-radius: 10px; color: white; font-weight: 800; font-size: 14px; text-transform: uppercase; cursor: pointer; min-height: 65px; touch-action: manipulation; border-bottom: 4px solid rgba(0,0,0,0.5); }
-        button:active { transform: translateY(2px); border-bottom-width: 2px; }
-        .btn-record { grid-column: span 3; background: var(--success); font-size: 18px; }
-        .btn-record.active { background: var(--danger); animation: pulse 1s infinite; }
-        .btn-action { background: #555; }
+        :root {
+            --bg-cockpit: #0b0f17;
+            --panel: #111827;
+            --panel-border: #1f2937;
+            --accent: #00ffcc;
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --amber-tc: #fbbf24;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-cockpit);
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            color: var(--text-main);
+            user-select: none;
+        }
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            background: #1e293b;
+        }
+
+        /* Top Header Bar - Optimized for Mobile Viewports */
+        .rally-header {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(11, 15, 23, 0.98);
+            backdrop-filter: blur(8px);
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--panel-border);
+            z-index: 1000;
+            gap: 6px;
+            min-height: 50px;
+        }
+        .rally-brand {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+        .brand-title {
+            font-size: 14px;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+        .btn-header {
+            background: #1f2937;
+            color: #f3f4f6;
+            border: 1px solid #374151;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+            min-height: 36px;
+            touch-action: manipulation;
+        }
+        .btn-header:hover {
+            background: #374151;
+            color: #fff;
+        }
+        .btn-header.btn-clear {
+            color: #fca5a5;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+        .btn-header.btn-clear:hover {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }
+
+        /* Co-Driver Tripmeter & Cockpit Panel */
+        .ui-panel {
+            flex-shrink: 0;
+            background: var(--panel);
+            border-top: 2px solid var(--accent);
+            padding: 10px 12px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+            box-shadow: 0 -8px 24px rgba(0,0,0,0.6);
+            z-index: 1000;
+        }
+        
+        .trip-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .trip-card {
+            background: #000;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            padding: 6px 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .trip-label {
+            font-size: 9px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .trip-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--accent);
+            line-height: 1.1;
+            margin-top: 2px;
+        }
+        .trip-unit {
+            font-size: 10px;
+            color: #6b7280;
+            font-weight: 600;
+            margin-left: 2px;
+        }
+
+        .btn-mini-reset {
+            background: #27272a;
+            color: #d1d5db;
+            border: 1px solid #3f3f46;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .btn-mini-reset:hover { background: #3f3f46; color: #fff; }
+
+        /* Calibration strip */
+        .cal-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #090d16;
+            border: 1px solid #1e293b;
+            padding: 4px 8px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .cal-btns {
+            display: flex;
+            gap: 4px;
+        }
+        .btn-cal {
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 2px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 10px;
+        }
+        .btn-cal:hover { color: #fff; background: #334155; }
+
+        /* Big Tactile Action Buttons */
+        .action-grid {
+            display: grid;
+            grid-template-columns: 2fr 1.1fr 1fr 1fr;
+            gap: 6px;
+        }
+        button.btn-cockpit {
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 800;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            cursor: pointer;
+            min-height: 48px;
+            touch-action: manipulation;
+            transition: all 0.1s ease-out;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        button.btn-cockpit:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .btn-rec {
+            background: var(--success);
+            color: #064e3b;
+            font-size: 14px;
+            font-weight: 900;
+        }
+        .btn-rec.active {
+            background: var(--danger);
+            color: #fff;
+            animation: pulse-danger 1.2s infinite;
+        }
+        .btn-secondary {
+            background: #1f2937;
+            color: #f3f4f6;
+            border: 1px solid #374151;
+        }
+        .btn-flag {
+            background: #f59e0b;
+            color: #000;
+            font-weight: 900;
+        }
+
+        @keyframes pulse-danger {
+            0% { opacity: 1; }
+            50% { opacity: 0.75; }
+            100% { opacity: 1; }
+        }
+
+        /* Rally Flag Leaflet Marker CSS */
+        .rally-flag-marker {
+            background: transparent;
+            border: none;
+        }
+        .flag-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 800;
+            white-space: nowrap;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.4);
+            transform: translateY(-50%);
+            transition: transform 0.15s ease;
+        }
+        .flag-box:hover {
+            transform: translateY(-50%) scale(1.15);
+            z-index: 1000 !important;
+        }
+        .flag-start { background: #059669; color: #fff; border-color: #34d399; }
+        .flag-finish { background: #000; color: #fff; border-color: #fff; }
+        .flag-tc { background: #f59e0b; color: #000; border-color: #fef08a; }
+        .flag-caution { background: #dc2626; color: #fff; border-color: #f87171; }
+        .flag-wpt { background: #0284c7; color: #fff; border-color: #7dd3fc; }
+
+        .leaflet-popup-content-wrapper {
+            background: #111827 !important;
+            color: #f9fafb !important;
+            border: 1px solid #374151 !important;
+            border-radius: 8px !important;
+        }
+        .leaflet-popup-tip { background: #111827 !important; }
+
         #fileInput { display: none; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(4px);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-card {
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 420px;
+            padding: 20px;
+        }
     </style>
 </head>
-<body onload="checkRecoveryData()">
-    <div id="map"></div>
-    <div class="ui-panel">
-        <div class="stats">
-            <span id="stat-points">PTS: 0</span>
-            <span id="stat-dist">0.00 km</span>
-            <span id="stat-accuracy"></span>
+<body onload="initRallyMaster()">
+
+    <!-- Compact Responsive Header -->
+    <header class="rally-header">
+        <div class="rally-brand">
+            <span class="brand-title">Rally Route Master</span>
         </div>
-        <button id="recordBtn" class="btn-record" onclick="toggleRecording()">Start Recce Recording</button>
-        <button class="btn-action" onclick="document.getElementById('fileInput').click()">Import</button>
-        <button class="btn-action" onclick="downloadGPX()">Save</button>
-        <button class="btn-action" onclick="clearRoute()">Clear</button>
-        <input type="file" id="fileInput" accept=".gpx" onchange="importGPX(event)">
+        <div class="header-actions">
+            <button class="btn-header" onclick="toggleMapLayer()" id="layerToggleBtn" title="Toggle between Street Map & Satellite Imagery">
+                <span id="layerIcon">🛰</span> <span class="btn-text">Sat</span>
+            </button>
+            <button class="btn-header" onclick="document.getElementById('fileInput').click()" title="Import GPX Track & Waypoint Flags">
+                <span>📥</span> <span class="btn-text">Import</span>
+            </button>
+            <button class="btn-header" onclick="exportGPX()" title="Export GPX with Waypoint Flags">
+                <span>💾</span> <span class="btn-text">Save</span>
+            </button>
+            <button class="btn-header btn-clear" onclick="clearAllRoute()" title="Clear Track & Flags">
+                <span>🗑</span> <span class="btn-text">Clear</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Leaflet Map Container -->
+    <div id="map"></div>
+
+    <!-- Co-Driver Cockpit & Tripmeter Panel -->
+    <footer class="ui-panel">
+        <div class="trip-grid">
+            <div class="trip-card">
+                <div class="trip-label">
+                    <span>Total Dist</span>
+                    <span id="stat-pts">0 PTS</span>
+                </div>
+                <div class="trip-value">
+                    <span id="val-total">0.00</span><span class="trip-unit">km</span>
+                </div>
+            </div>
+
+            <div class="trip-card">
+                <div class="trip-label">
+                    <span>Stage Odo</span>
+                    <button class="btn-mini-reset" onclick="resetStageDist()">ZERO</button>
+                </div>
+                <div class="trip-value">
+                    <span id="val-stage">0.00</span><span class="trip-unit">km</span>
+                </div>
+            </div>
+
+            <div class="trip-card">
+                <div class="trip-label">
+                    <span>Interval</span>
+                    <button class="btn-mini-reset" onclick="resetIntervalDist()">ZERO</button>
+                </div>
+                <div class="trip-value">
+                    <span id="val-interval">0.00</span><span class="trip-unit">km</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="cal-strip">
+            <div id="gps-status">GPS: Searching...</div>
+            <div class="cal-btns">
+                <span style="color:#64748b; margin-right:2px;">CAL:</span>
+                <button class="btn-cal" onclick="adjustTripmeter(-0.01)">-0.01</button>
+                <button class="btn-cal" onclick="adjustTripmeter(0.01)">+0.01</button>
+                <button class="btn-cal" onclick="adjustTripmeter(0.1)">+0.10</button>
+            </div>
+        </div>
+
+        <div class="action-grid">
+            <button id="recordBtn" class="btn-cockpit btn-rec" onclick="toggleRecording()">
+                <span>⏺ Recce Record</span>
+            </button>
+            <button class="btn-cockpit btn-flag" onclick="openDropFlagModal()">
+                <span>+ Flag</span>
+            </button>
+            <button class="btn-cockpit btn-secondary" onclick="fitRouteBounds()">
+                <span>Route</span>
+            </button>
+            <button class="btn-cockpit btn-secondary" onclick="centerOnCar()">
+                <span>Car</span>
+            </button>
+        </div>
+        <input type="file" id="fileInput" accept=".gpx" onchange="handleGPXImport(event)">
+    </footer>
+
+    <!-- Drop Flag Modal -->
+    <div id="dropFlagModal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 style="margin-top:0; color:#fff; font-size:16px;">Add Rally Waypoint Flag</h3>
+            <p style="color:#9ca3af; font-size:12px; margin-bottom:12px;">Place at current vehicle GPS position:</p>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <input type="text" id="flagNameInput" placeholder="Flag Name (e.g. TC 1, Caution, Hairpin)" style="background:#1f2937; border:1px solid #374151; color:#fff; padding:10px; border-radius:6px; font-size:14px;">
+                <select id="flagTypeSelect" style="background:#1f2937; border:1px solid #374151; color:#fff; padding:10px; border-radius:6px; font-size:14px;">
+                    <option value="start">🚩 Stage Start Flag</option>
+                    <option value="finish">🏁 Flying Finish Flag</option>
+                    <option value="tc">⏱ Time Control (TC)</option>
+                    <option value="caution">⚠ Caution / Hazard</option>
+                    <option value="hairpin">↩ Acute Hairpin</option>
+                    <option value="jump">⏫ Jump over Crest</option>
+                    <option value="water">🌊 Water Splash</option>
+                    <option value="waypoint">📍 General Waypoint</option>
+                </select>
+                <div style="display:flex; gap:8px; margin-top:8px;">
+                    <button class="btn-header" style="flex:1; padding:10px; background:#10b981; color:#064e3b;" onclick="confirmDropFlag()">Save Flag</button>
+                    <button class="btn-header" style="flex:1; padding:10px;" onclick="closeDropFlagModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-gpx/1.7.0/gpx.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => {
-                    console.warn('Service Worker registration failed:', err);
-                    console.log('App will work online but without offline capability');
-                });
+        let routeName = "Rally Route";
+        let points = [];
+        let waypoints = [];
+        let totalDist = 0;
+        let stageDist = 0;
+        let intervalDist = 0;
+        let isRecording = false;
+        let liveMarker = null;
+        let currentPos = null;
+        let wakeLock = null;
+        let markersGroup = null;
+        let currentTileLayer = null;
+        let isSatellite = false;
+
+        const MAX_JUMP_KM = 0.15;
+
+        // Leaflet Map Initialization
+        const map = L.map('map', { zoomControl: false }).setView([52.4112, -3.7245], 13);
+        
+        // 100% Reliable Map Tile Providers (NO API KEY REQUIRED)
+        const TILE_PROVIDERS = {
+            street: {
+                url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attribution: '&copy; OpenStreetMap contributors',
+                maxZoom: 19
+            },
+            satellite: {
+                url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                attribution: 'Tiles &copy; Esri &mdash; Maxar, Earthstar Geographics',
+                maxZoom: 19
+            }
+        };
+
+        function setTileLayer(type) {
+            if (currentTileLayer) {
+                map.removeLayer(currentTileLayer);
+            }
+            const config = TILE_PROVIDERS[type] || TILE_PROVIDERS.street;
+            currentTileLayer = L.tileLayer(config.url, {
+                attribution: config.attribution,
+                maxZoom: config.maxZoom
+            }).addTo(map);
+
+            if (routeLine) routeLine.bringToFront();
+        }
+
+        // Initialize with high-reliability OpenStreetMap tiles
+        setTileLayer('street');
+
+        function toggleMapLayer() {
+            isSatellite = !isSatellite;
+            setTileLayer(isSatellite ? 'satellite' : 'street');
+            const btn = document.getElementById('layerToggleBtn');
+            if (btn) {
+                btn.innerHTML = isSatellite 
+                    ? '<span>🗺</span> <span class="btn-text">Map</span>' 
+                    : '<span>🛰</span> <span class="btn-text">Sat</span>';
+            }
+        }
+
+        let routeLine = L.polyline([], {
+            color: '#00ffcc',
+            weight: 6,
+            opacity: 0.9,
+            lineJoin: 'round'
+        }).addTo(map);
+
+        markersGroup = L.layerGroup().addTo(map);
+
+        function haversine(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function createFlagIcon(type, label) {
+            let cls = 'flag-wpt';
+            let iconSvg = '';
+            const t = (type || '').toLowerCase();
+
+            if (t.includes('start')) {
+                cls = 'flag-start';
+                iconSvg = '🚩';
+            } else if (t.includes('finish')) {
+                cls = 'flag-finish';
+                iconSvg = '🏁';
+            } else if (t.includes('tc') || t.includes('control')) {
+                cls = 'flag-tc';
+                iconSvg = '⏱';
+            } else if (t.includes('caution') || t.includes('hazard') || t.includes('danger')) {
+                cls = 'flag-caution';
+                iconSvg = '⚠';
+            } else if (t.includes('jump')) {
+                cls = 'flag-tc';
+                iconSvg = '⏫';
+            } else if (t.includes('water')) {
+                cls = 'flag-wpt';
+                iconSvg = '🌊';
+            } else if (t.includes('hairpin')) {
+                cls = 'flag-caution';
+                iconSvg = '↩';
+            } else {
+                iconSvg = '📍';
+            }
+
+            const html = `<div class="flag-box ${cls}"><span>${iconSvg}</span><span>${label}</span></div>`;
+            return L.divIcon({
+                className: 'rally-flag-marker',
+                html: html,
+                iconSize: [80, 24],
+                iconAnchor: [40, 24],
+                popupAnchor: [0, -20]
             });
         }
 
-        let points = [], totalDist = 0, isRecording = false, liveMarker = null, wakeLock = null, gpxLayer = null;
-        const MAX_JUMP_DISTANCE = 0.1; // km - reject unrealistic GPS jumps
-        const ACCURACY_THRESHOLD = 50; // meters - warn if accuracy is poor
-
-        const map = L.map('map', { zoomControl: false }).setView([52.13, -4.06], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let routeLine = L.polyline([], {color: '#ff0000', weight: 6, opacity: 0.8}).addTo(map);
-
-        async function requestWakeLock() {
-            try { 
-                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); 
-            } 
-            catch (err) { 
-                console.error("WakeLock Error:", err); 
-            }
+        function renderWaypoints() {
+            markersGroup.clearLayers();
+            waypoints.forEach((wpt, index) => {
+                const marker = L.marker([wpt.lat, wpt.lon], {
+                    icon: createFlagIcon(wpt.type, wpt.name)
+                });
+                const popupHtml = `
+                    <div style="font-family:'Plus Jakarta Sans',sans-serif; min-width:180px;">
+                        <div style="font-weight:800; font-size:14px; margin-bottom:4px; color:#fff;">${wpt.name}</div>
+                        <div style="color:#00ffcc; font-size:12px; font-weight:700; font-family:'JetBrains Mono'; margin-bottom:4px;">
+                            KM: ${(wpt.distFromStart || 0).toFixed(2)} km
+                        </div>
+                        ${wpt.desc ? `<div style="color:#d1d5db; font-size:12px; margin-bottom:6px;">${wpt.desc}</div>` : ''}
+                        ${wpt.ele ? `<div style="color:#9ca3af; font-size:11px;">Elevation: ${wpt.ele}m</div>` : ''}
+                        <button onclick="deleteWaypoint('${wpt.id || index}')" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold; cursor:pointer; margin-top:6px;">Delete Flag</button>
+                    </div>
+                `;
+                marker.bindPopup(popupHtml);
+                markersGroup.addLayer(marker);
+            });
         }
 
-        async function releaseWakeLock() {
-            if (wakeLock) {
-                try {
-                    await wakeLock.release();
-                    wakeLock = null;
-                    console.log('Wake Lock released');
-                } catch (err) {
-                    console.error("WakeLock release error:", err);
-                }
-            }
+        function deleteWaypoint(idOrIndex) {
+            waypoints = waypoints.filter((w, idx) => (w.id ? w.id !== idOrIndex : idx != idOrIndex));
+            renderWaypoints();
+            saveBackup();
         }
 
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
                 const { latitude, longitude, accuracy, altitude } = pos.coords;
-                updateLiveMarker(latitude, longitude, accuracy);
-                updateAccuracyDisplay(accuracy);
+                currentPos = { lat: latitude, lon: longitude };
+                updateLiveCarMarker(latitude, longitude);
+                updateGpsAccuracyDisplay(accuracy);
+
                 if (isRecording) {
-                    addPoint(latitude, longitude, altitude, accuracy);
-                    map.panTo([latitude, longitude]);
+                    recordGpsPoint(latitude, longitude, altitude, accuracy);
                 }
             }, (err) => {
-                console.error("Geolocation error:", err);
-                updateAccuracyDisplay(null, err.message);
-            }, { 
-                enableHighAccuracy: true, 
+                document.getElementById('gps-status').innerHTML = '<span style="color:#ef4444;">GPS Err: ' + err.message + '</span>';
+            }, {
+                enableHighAccuracy: true,
                 maximumAge: 0,
                 timeout: 10000
             });
         }
 
-        function updateLiveMarker(lat, lng, accuracy) {
+        function updateLiveCarMarker(lat, lng) {
             if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], { 
-                    radius: 10, 
-                    fillColor: "#007bff", 
-                    color: "#fff", 
-                    weight: 3, 
-                    fillOpacity: 1, 
-                    pane: 'markerPane' 
+                liveMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#00ffcc',
+                    color: '#ffffff',
+                    weight: 3,
+                    fillOpacity: 1
                 }).addTo(map);
-            } else { 
-                liveMarker.setLatLng([lat, lng]); 
-            }
-        }
-
-        function updateAccuracyDisplay(accuracy, error = null) {
-            const accuracyEl = document.getElementById('stat-accuracy');
-            if (error) {
-                accuracyEl.innerHTML = `<span class="stat-warning">⚠ ${error}</span>`;
-            } else if (accuracy) {
-                const color = accuracy > ACCURACY_THRESHOLD ? 'var(--warning)' : 'var(--accent)';
-                accuracyEl.innerHTML = `<span style="color: ${color}">±${accuracy.toFixed(0)}m</span>`;
             } else {
-                accuracyEl.innerHTML = '';
+                liveMarker.setLatLng([lat, lng]);
             }
         }
 
-        function addPoint(lat, lon, ele = null, accuracy = null) {
-            const newPos = L.latLng(lat, lon);
+        function updateGpsAccuracyDisplay(acc) {
+            const el = document.getElementById('gps-status');
+            if (acc) {
+                const color = acc < 15 ? 'var(--accent)' : (acc < 35 ? 'var(--warning)' : 'var(--danger)');
+                el.innerHTML = `GPS: <span style="color:${color}; font-weight:bold;">±${Math.round(acc)}m</span>`;
+            }
+        }
+
+        function recordGpsPoint(lat, lon, ele, accuracy) {
             if (points.length > 0) {
-                // EXFIX: Force float casting to avoid string evaluation issues within distance calculations
-                const lastLat = parseFloat(points[points.length-1].lat);
-                const lastLon = parseFloat(points[points.length-1].lon);
-                const lastPos = L.latLng(lastLat, lastLon);
-                const distance = lastPos.distanceTo(newPos) / 1000; 
-                
-                if (distance > MAX_JUMP_DISTANCE) {
-                    console.warn(`GPS jump detected: ${distance.toFixed(3)}km, ignoring point`);
+                const last = points[points.length - 1];
+                const d = haversine(last.lat, last.lon, lat, lon);
+                if (d > MAX_JUMP_KM) {
+                    console.warn("GPS jump ignored: " + d.toFixed(3) + " km");
                     return;
                 }
-                
-                totalDist += distance;
+                totalDist += d;
+                stageDist += d;
+                intervalDist += d;
             }
-            
-            const point = {
-                lat: lat.toFixed(6), 
-                lon: lon.toFixed(6)
-            };
-            
-            if (ele !== null && ele !== undefined) {
-                point.ele = ele.toFixed(1);
-            }
-            
-            if (accuracy !== null && accuracy !== undefined) {
-                point.accuracy = accuracy.toFixed(1);
-            }
-            
-            points.push(point);
-            routeLine.addLatLng(newPos);
-            updateUI();
-            saveToLocalStorage();
-        }
 
-        function saveToLocalStorage() {
-            try {
-                localStorage.setItem('rally_backup_points', JSON.stringify(points));
-                localStorage.setItem('rally_backup_dist', totalDist.toString());
-            } catch (e) {
-                console.warn('Storage quota exceeded or unavailable:', e);
-                alert('Warning: Could not save backup. Storage may be full.');
-            }
+            const pt = { lat, lon, ele: ele ? Math.round(ele * 10) / 10 : null, cumDist: totalDist };
+            points.push(pt);
+            routeLine.addLatLng([lat, lon]);
+
+            updateCockpitUI();
+            saveBackup();
         }
 
         async function toggleRecording() {
             isRecording = !isRecording;
             const btn = document.getElementById('recordBtn');
-            btn.innerText = isRecording ? "⏺ Recording..." : "Start Recce Recording";
+            btn.innerHTML = isRecording ? "<span>⏹ Recording Recce...</span>" : "<span>⏺ Recce Record</span>";
             btn.classList.toggle('active', isRecording);
-            
+
             if (isRecording) {
-                await requestWakeLock();
+                if (navigator.wakeLock) {
+                    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+                }
             } else {
-                await releaseWakeLock();
+                if (wakeLock) {
+                    wakeLock.release().catch(()=>{});
+                    wakeLock = null;
+                }
             }
         }
 
-        function updateUI() {
-            document.getElementById('stat-points').innerText = `PTS: ${points.length}`;
-            document.getElementById('stat-dist').innerText = `${totalDist.toFixed(2)} km`;
+        function updateCockpitUI() {
+            document.getElementById('val-total').innerText = totalDist.toFixed(2);
+            document.getElementById('val-stage').innerText = stageDist.toFixed(2);
+            document.getElementById('val-interval').innerText = intervalDist.toFixed(2);
+            document.getElementById('stat-pts').innerText = points.length + ' PTS';
         }
 
-        function downloadGPX() {
-            if(points.length < 2) return alert("No data to save.");
-            
-            let gpx = `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="RallyRM v1.7.0" xmlns="http://www.topografix.com/GPX/1/1">`;
-            gpx += `<metadata><time>${new Date().toISOString()}</time></metadata>`;
-            gpx += `<trk><name>Rally Route</name><trkseg>`;
-            
-            points.forEach(p => {
-                gpx += `<trkpt lat="${p.lat}" lon="${p.lon}">`;
-                if (p.ele) gpx += `<ele>${p.ele}</ele>`;
-                gpx += `</trkpt>`;
+        function resetStageDist() {
+            stageDist = 0;
+            updateCockpitUI();
+        }
+
+        function resetIntervalDist() {
+            intervalDist = 0;
+            updateCockpitUI();
+        }
+
+        function adjustTripmeter(delta) {
+            stageDist = Math.max(0, stageDist + delta);
+            intervalDist = Math.max(0, intervalDist + delta);
+            totalDist = Math.max(0, totalDist + delta);
+            updateCockpitUI();
+        }
+
+        function fitRouteBounds() {
+            if (points.length > 0) {
+                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
+            } else if (currentPos) {
+                map.setView([currentPos.lat, currentPos.lon], 15);
+            }
+        }
+
+        function centerOnCar() {
+            if (currentPos) {
+                map.panTo([currentPos.lat, currentPos.lon]);
+            }
+        }
+
+        function openDropFlagModal() {
+            document.getElementById('dropFlagModal').style.display = 'flex';
+        }
+        function closeDropFlagModal() {
+            document.getElementById('dropFlagModal').style.display = 'none';
+        }
+
+        function confirmDropFlag() {
+            const name = document.getElementById('flagNameInput').value.trim() || 'Flag';
+            const type = document.getElementById('flagTypeSelect').value;
+            const targetLat = currentPos ? currentPos.lat : map.getCenter().lat;
+            const targetLon = currentPos ? currentPos.lon : map.getCenter().lng;
+
+            waypoints.push({
+                id: 'wpt-' + Date.now(),
+                name: name,
+                type: type,
+                lat: targetLat,
+                lon: targetLon,
+                distFromStart: totalDist
             });
-            
-            gpx += `</trkseg></trk></gpx>`;
-            
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(new Blob([gpx], { type: 'application/gpx+xml' }));
-            a.download = `route_${Date.now()}.gpx`;
-            a.click();
+
+            renderWaypoints();
+            saveBackup();
+            closeDropFlagModal();
+            document.getElementById('flagNameInput').value = '';
         }
 
-        function importGPX(event) {
+        function handleGPXImport(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
-            if (!file.name.toLowerCase().endsWith('.gpx')) {
-                alert('Error: Only .gpx files are allowed');
-                event.target.value = '';
-                return;
-            }
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
-                    if(gpxLayer) map.removeLayer(gpxLayer);
-                    gpxLayer = new L.GPX(e.target.result, {
-                        async: true, 
-                        polyline_options: { color: '#ff0000', weight: 6, opacity: 0.7 },
-                        marker_options: { startIconUrl: '', endIconUrl: '', shadowUrl: '' }
-                    }).on('loaded', function(e) { 
-                        map.fitBounds(e.target.getBounds()); 
-                    }).on('error', function(err) {
-                        console.error('GPX parsing error:', err);
-                        alert('Error: Invalid GPX file');
-                    }).addTo(map);
-                } catch (err) {
-                    console.error('Error loading GPX:', err);
-                    alert('Error: Could not load GPX file');
+                    parseAndLoadGPX(e.target.result);
+                } catch(err) {
+                    alert("Error parsing GPX file: " + err.message);
                 }
-            };
-            reader.onerror = function() {
-                alert('Error: Could not read file');
             };
             reader.readAsText(file);
         }
 
-        function clearRoute() {
-            if(!confirm("Clear everything?")) return;
-            points = []; 
+        function parseAndLoadGPX(xmlText) {
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(xmlText, 'text/xml');
+
+            const nameEl = xml.querySelector('name');
+            if (nameEl) routeName = nameEl.textContent.trim();
+
+            let rawPoints = Array.from(xml.querySelectorAll('trkpt'));
+            if (rawPoints.length === 0) rawPoints = Array.from(xml.querySelectorAll('rtept'));
+
+            points = [];
             totalDist = 0;
-            routeLine.setLatLngs([]);
-            if(gpxLayer) map.removeLayer(gpxLayer);
-            
-            // EXFIX: Cleaned targeted keys to preserve non-app local storage records
-            try {
-                localStorage.removeItem('rally_backup_points');
-                localStorage.removeItem('rally_backup_dist');
-            } catch (e) {
-                console.warn('Could not clear local storage items:', e);
+
+            rawPoints.forEach((pt) => {
+                const lat = parseFloat(pt.getAttribute('lat'));
+                const lon = parseFloat(pt.getAttribute('lon'));
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                const eleEl = pt.querySelector('ele');
+                const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+
+                if (points.length > 0) {
+                    const last = points[points.length - 1];
+                    totalDist += haversine(last.lat, last.lon, lat, lon);
+                }
+
+                points.push({ lat, lon, ele, cumDist: totalDist });
+            });
+
+            waypoints = [];
+            const rawWpts = Array.from(xml.querySelectorAll('wpt'));
+
+            rawWpts.forEach((w, idx) => {
+                const lat = parseFloat(w.getAttribute('lat'));
+                const lon = parseFloat(w.getAttribute('lon'));
+                if (isNaN(lat) || isNaN(lon)) return;
+
+                const name = w.querySelector('name') ? w.querySelector('name').textContent.trim() : ('Flag ' + (idx + 1));
+                const desc = w.querySelector('desc') ? w.querySelector('desc').textContent.trim() : '';
+                const sym = w.querySelector('sym') ? w.querySelector('sym').textContent.trim() : 'Flag';
+                const eleEl = w.querySelector('ele');
+                const ele = eleEl ? parseFloat(eleEl.textContent) : null;
+
+                let type = 'waypoint';
+                const lower = (name + ' ' + sym + ' ' + desc).toLowerCase();
+                if (lower.includes('start')) type = 'start';
+                else if (lower.includes('finish') || lower.includes('ff')) type = 'finish';
+                else if (lower.includes('tc') || lower.includes('control')) type = 'tc';
+                else if (lower.includes('caution') || lower.includes('hazard') || lower.includes('!')) type = 'caution';
+                else if (lower.includes('jump')) type = 'jump';
+                else if (lower.includes('water')) type = 'water';
+                else if (lower.includes('hairpin')) type = 'hairpin';
+
+                let nearestDist = 0;
+                if (points.length > 0) {
+                    let minD = Infinity;
+                    points.forEach((p) => {
+                        const d = haversine(lat, lon, p.lat, p.lon);
+                        if (d < minD) {
+                            minD = d;
+                            nearestDist = p.cumDist;
+                        }
+                    });
+                }
+
+                waypoints.push({
+                    id: 'wpt-' + idx + '-' + Date.now(),
+                    name,
+                    desc,
+                    type,
+                    lat,
+                    lon,
+                    ele,
+                    distFromStart: nearestDist
+                });
+            });
+
+            const hasStart = waypoints.some(w => w.type === 'start');
+            const hasFinish = waypoints.some(w => w.type === 'finish');
+
+            if (!hasStart && points.length > 0) {
+                waypoints.unshift({
+                    id: 'wpt-start',
+                    name: 'Stage Start',
+                    type: 'start',
+                    lat: points[0].lat,
+                    lon: points[0].lon,
+                    distFromStart: 0
+                });
             }
-            updateUI();
+            if (!hasFinish && points.length > 1) {
+                waypoints.push({
+                    id: 'wpt-finish',
+                    name: 'Flying Finish',
+                    type: 'finish',
+                    lat: points[points.length - 1].lat,
+                    lon: points[points.length - 1].lon,
+                    distFromStart: totalDist
+                });
+            }
+
+            const latLngs = points.map(p => [p.lat, p.lon]);
+            routeLine.setLatLngs(latLngs);
+
+            stageDist = totalDist;
+            intervalDist = totalDist;
+            updateCockpitUI();
+            renderWaypoints();
+            fitRouteBounds();
+            saveBackup();
         }
 
-        function checkRecoveryData() {
+        function exportGPX() {
+            if (points.length < 2 && waypoints.length === 0) {
+                alert("No route or flags to export.");
+                return;
+            }
+
+            let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+            xml += '<gpx version="1.1" creator="Rally Route Master Pro v2.0" xmlns="http://www.topografix.com/GPX/1/1">\n';
+            xml += '  <metadata><name>' + routeName + '</name><time>' + new Date().toISOString() + '</time></metadata>\n';
+
+            waypoints.forEach(w => {
+                xml += '  <wpt lat="' + w.lat.toFixed(6) + '" lon="' + w.lon.toFixed(6) + '">\n';
+                xml += '    <name>' + w.name + '</name>\n';
+                if (w.desc) xml += '    <desc>' + w.desc + '</desc>\n';
+                xml += '    <type>' + w.type + '</type>\n';
+                xml += '    <sym>' + w.type + '</sym>\n';
+                if (w.ele) xml += '    <ele>' + w.ele + '</ele>\n';
+                xml += '  </wpt>\n';
+            });
+
+            if (points.length > 0) {
+                xml += '  <trk><name>' + routeName + '</name><trkseg>\n';
+                points.forEach(p => {
+                    xml += '    <trkpt lat="' + p.lat.toFixed(6) + '" lon="' + p.lon.toFixed(6) + '">';
+                    if (p.ele) xml += '<ele>' + p.ele + '</ele>';
+                    xml += '</trkpt>\n';
+                });
+                xml += '  </trkseg></trk>\n';
+            }
+
+            xml += '</gpx>';
+
+            const blob = new Blob([xml], { type: 'application/gpx+xml' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = routeName.replace(/[^a-z0-9_-]/gi, '_') + '_' + Date.now() + '.gpx';
+            a.click();
+        }
+
+        function clearAllRoute() {
+            if (!confirm("Clear current route, points, and all rally flags?")) return;
+            points = [];
+            waypoints = [];
+            totalDist = 0;
+            stageDist = 0;
+            intervalDist = 0;
+            routeLine.setLatLngs([]);
+            markersGroup.clearLayers();
+            updateCockpitUI();
+            localStorage.removeItem('rally_master_points');
+            localStorage.removeItem('rally_master_wpts');
+            localStorage.removeItem('rally_master_dist');
+        }
+
+        function saveBackup() {
             try {
-                const savedPoints = localStorage.getItem('rally_backup_points');
-                if (savedPoints) {
-                    const parsedPoints = JSON.parse(savedPoints);
-                    if (parsedPoints && parsedPoints.length > 0) {
-                        if (confirm("Restore unsaved session?")) {
-                            points = parsedPoints;
-                            totalDist = parseFloat(localStorage.getItem('rally_backup_dist')) || 0;
-                            
-                            // EXFIX: Correctly map custom saved property objects into nested Leaflet-compatible numeric arrays [lat, lng]
-                            const latLngArray = points.map(p => [parseFloat(p.lat), parseFloat(p.lon)]);
-                            routeLine.setLatLngs(latLngArray);
-                            
-                            updateUI();
-                            if(latLngArray.length > 0) {
-                                map.fitBounds(routeLine.getBounds());
-                            }
-                        } else { 
-                            localStorage.removeItem('rally_backup_points');
-                            localStorage.removeItem('rally_backup_dist');
-                        }
+                localStorage.setItem('rally_master_points', JSON.stringify(points));
+                localStorage.setItem('rally_master_wpts', JSON.stringify(waypoints));
+                localStorage.setItem('rally_master_dist', totalDist.toString());
+            } catch(e){}
+        }
+
+        function initRallyMaster() {
+            try {
+                const pts = localStorage.getItem('rally_master_points');
+                const wpts = localStorage.getItem('rally_master_wpts');
+                const dist = localStorage.getItem('rally_master_dist');
+
+                if (pts) {
+                    const parsed = JSON.parse(pts);
+                    if (parsed && parsed.length > 0) {
+                        points = parsed;
+                        waypoints = wpts ? JSON.parse(wpts) : [];
+                        totalDist = parseFloat(dist) || 0;
+                        stageDist = totalDist;
+                        intervalDist = totalDist;
+
+                        routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
+                        renderWaypoints();
+                        updateCockpitUI();
+                        fitRouteBounds();
+                        return;
                     }
                 }
-            } catch (e) {
-                console.error('Error checking recovery data:', e);
-            }
+            } catch(e){}
         }
-
-        // EXFIX: Synchronous fallback execution for document unloads. 
-        // WakeLock release cannot safely expect async/await execution inside beforeunload.
-        window.addEventListener('beforeunload', () => {
-            if (wakeLock) {
-                wakeLock.release().catch(err => console.error("Synchronous cleanup warning:", err));
-                wakeLock = null;
-            }
-        });
     </script>
 </body>
 </html>
