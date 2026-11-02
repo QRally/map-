@@ -248,10 +248,131 @@
             color: #f3f4f6;
             border: 1px solid #374151;
         }
+        .btn-cockpit.btn-car-active {
+            background: rgba(0, 255, 204, 0.18) !important;
+            color: var(--accent) !important;
+            border: 2px solid var(--accent) !important;
+            box-shadow: 0 0 14px rgba(0, 255, 204, 0.45) !important;
+        }
         .btn-flag {
             background: #f59e0b;
             color: #000;
             font-weight: 900;
+        }
+
+        /* Wake Lock Status Badge in Cockpit */
+        .btn-wake {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #1e293b;
+            color: #94a3b8;
+            border: 1px solid #334155;
+            padding: 2px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 10px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s ease;
+        }
+        .btn-wake.awake {
+            background: rgba(16, 185, 129, 0.22);
+            color: #10b981;
+            border-color: rgba(16, 185, 129, 0.5);
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.35);
+        }
+        .btn-wake.sleeping {
+            background: rgba(245, 158, 11, 0.2);
+            color: #f59e0b;
+            border-color: rgba(245, 158, 11, 0.4);
+        }
+
+        /* Floating Recenter Pill Button */
+        .floating-recenter {
+            display: none;
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: #000;
+            color: var(--accent);
+            border: 2px solid var(--accent);
+            border-radius: 9999px;
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.03em;
+            text-transform: uppercase;
+            box-shadow: 0 4px 18px rgba(0, 255, 204, 0.5), 0 2px 8px rgba(0,0,0,0.9);
+            cursor: pointer;
+            touch-action: manipulation;
+            animation: bounce-subtle 2s infinite ease-in-out;
+        }
+        .floating-recenter:active {
+            transform: translateX(-50%) scale(0.95);
+        }
+        @keyframes bounce-subtle {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(-3px); }
+        }
+
+        /* High-Visibility Live Rally Vehicle Beacon */
+        .rally-car-marker-wrap {
+            background: transparent;
+            border: none;
+        }
+        .rally-car-container {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+        .car-radar-ping {
+            position: absolute;
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            background: rgba(0, 255, 204, 0.45);
+            box-shadow: 0 0 16px rgba(0, 255, 204, 0.9);
+            animation: car-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+        }
+        .car-core-puck {
+            position: relative;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #060d17;
+            border: 3.5px solid #00ffcc;
+            box-shadow: 0 0 16px #00ffcc, 0 0 32px rgba(0, 255, 204, 0.7), 0 4px 14px rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        .car-heading-arrow {
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 12px solid #ffffff;
+            filter: drop-shadow(0 0 3px #00ffcc);
+            transform-origin: center 60%;
+        }
+        .car-center-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 8px #ffffff;
+        }
+        @keyframes car-ping {
+            0% { transform: scale(0.65); opacity: 0.95; }
+            80%, 100% { transform: scale(2.4); opacity: 0; }
         }
 
         @keyframes pulse-danger {
@@ -369,7 +490,11 @@
     </header>
 
     <!-- Leaflet Map Container (Unobstructed View) -->
-    <div id="map"></div>
+    <div id="map">
+        <button id="recenterBtn" class="floating-recenter" onclick="centerOnCar(true)">
+            <span>🎯 Recenter Car (Follow)</span>
+        </button>
+    </div>
 
     <!-- Co-Driver Cockpit & Tripmeter Panel -->
     <footer class="ui-panel">
@@ -406,7 +531,12 @@
         </div>
 
         <div class="cal-strip">
-            <div id="gps-status">GPS: Searching...</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <div id="gps-status">GPS: Searching...</div>
+                <button id="wakeBadge" class="btn-wake awake" onclick="toggleWakeLockManual()" title="Screen Wake Lock (Keeps display ON during driving)">
+                    <span>☀️</span> <span id="wakeStatusText">AWAKE</span>
+                </button>
+            </div>
             <div class="cal-btns">
                 <span style="color:#64748b; margin-right:2px;">CAL:</span>
                 <button class="btn-cal" onclick="adjustTripmeter(-0.01)">-0.01</button>
@@ -425,8 +555,8 @@
             <button class="btn-cockpit btn-secondary" onclick="fitRouteBounds()">
                 <span>Route</span>
             </button>
-            <button class="btn-cockpit btn-secondary" onclick="centerOnCar()">
-                <span>Car</span>
+            <button id="carBtn" class="btn-cockpit btn-secondary btn-car-active" onclick="centerOnCar(true)" title="Center on vehicle & lock auto-follow">
+                <span id="carBtnLabel">Car 🔒</span>
             </button>
         </div>
         <input type="file" id="fileInput" accept=".gpx" onchange="handleGPXImport(event)">
@@ -467,13 +597,17 @@
         let intervalDist = 0;
         let isRecording = false;
         let liveMarker = null;
+        let liveAccuracyCircle = null;
+        let lastGpsCoords = null;
         let currentPos = null;
+        let followCar = true;
         let wakeLock = null;
+        let wakeLockWanted = true;
         let currentTileLayer = null;
         let isSatellite = false;
         let waypointMarkers = [];
         let soundEnabled = true;
-        let lastChimedWptId = null;
+        let lastBeepedWptId = null;
 
         const MAX_JUMP_KM = 0.15;
 
@@ -680,14 +814,143 @@
             }
         }
 
-        // Live Geolocation
+        // Auto-center & Follow Car mode handling
+        map.on('dragstart', () => {
+            setFollowCar(false);
+        });
+
+        function setFollowCar(enabled) {
+            followCar = enabled;
+            const recenterBtn = document.getElementById('recenterBtn');
+            const carBtn = document.getElementById('carBtn');
+            const carBtnLabel = document.getElementById('carBtnLabel');
+
+            if (recenterBtn) {
+                recenterBtn.style.display = (enabled || !currentPos) ? 'none' : 'block';
+            }
+            if (carBtn) {
+                carBtn.classList.toggle('btn-car-active', enabled);
+            }
+            if (carBtnLabel) {
+                carBtnLabel.innerText = enabled ? 'Car 🔒' : 'Car';
+            }
+        }
+
+        function centerOnCar(forceFollow = true) {
+            if (currentPos) {
+                map.setView([currentPos.lat, currentPos.lon], Math.max(map.getZoom(), 16), { animate: true });
+                if (forceFollow) {
+                    setFollowCar(true);
+                }
+            } else {
+                alert("Acquiring GPS location... Please ensure GPS/Location is enabled.");
+            }
+        }
+
+        // Dedicated Screen Wake Lock Manager (Display stays awake while driving)
+        async function requestWakeLock(userExplicit = false) {
+            if (!wakeLockWanted && !userExplicit) return;
+            wakeLockWanted = true;
+
+            ensureWakeLockVideo();
+
+            if ('wakeLock' in navigator) {
+                try {
+                    if (!wakeLock || wakeLock.released) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        wakeLock.addEventListener('release', () => {
+                            if (wakeLockWanted && document.visibilityState === 'visible') {
+                                setTimeout(() => requestWakeLock(), 1000);
+                            } else {
+                                updateWakeLockBadge(false);
+                            }
+                        });
+                        updateWakeLockBadge(true);
+                    }
+                } catch(e) {
+                    console.warn('Wake lock error:', e);
+                    updateWakeLockBadge(false);
+                }
+            } else {
+                updateWakeLockBadge(false, 'No API');
+            }
+        }
+
+        function ensureWakeLockVideo() {
+            let vid = document.getElementById('wakeLockVideo');
+            if (!vid) {
+                vid = document.createElement('video');
+                vid.id = 'wakeLockVideo';
+                vid.setAttribute('playsinline', '');
+                vid.setAttribute('webkit-playsinline', '');
+                vid.muted = true;
+                vid.loop = true;
+                vid.style.position = 'fixed';
+                vid.style.width = '1px';
+                vid.style.height = '1px';
+                vid.style.opacity = '0.01';
+                vid.style.pointerEvents = 'none';
+                vid.style.zIndex = '-999';
+                vid.src = 'data:video/webm;base64,GkXfo0AgQoaBAUL3gQFC8oEEQvOBCEKCQAR3ZWJtQoeBAkKFgQIYUkoAkAcHTGF2ZjU4Ljc2LjEwMFNIZWxwZXIxAQAXN2hlYWRlcgEABzVvdXRwdXQBAA==';
+                document.body.appendChild(vid);
+            }
+            vid.play().catch(()=>{});
+        }
+
+        function updateWakeLockBadge(isActive, note) {
+            const badge = document.getElementById('wakeBadge');
+            const text = document.getElementById('wakeStatusText');
+            if (!badge || !text) return;
+            if (isActive) {
+                badge.className = 'btn-wake awake';
+                text.innerText = 'AWAKE';
+                badge.title = 'Screen Wake Lock is ACTIVE (Display stays ON while driving)';
+            } else {
+                badge.className = 'btn-wake sleeping';
+                text.innerText = note || 'TAP AWAKE';
+                badge.title = 'Screen Wake Lock is OFF: Tap to keep screen awake';
+            }
+        }
+
+        function toggleWakeLockManual() {
+            if (wakeLock && !wakeLock.released) {
+                wakeLockWanted = false;
+                wakeLock.release().catch(()=>{});
+                wakeLock = null;
+                updateWakeLockBadge(false);
+            } else {
+                requestWakeLock(true);
+            }
+        }
+
+        // Re-acquire wake lock on tab resume or any driver interaction
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && wakeLockWanted) {
+                requestWakeLock();
+            }
+        });
+        ['click', 'touchstart', 'pointerdown'].forEach(ev => {
+            window.addEventListener(ev, () => {
+                if (!wakeLock && wakeLockWanted) {
+                    requestWakeLock();
+                }
+            }, { passive: true, once: false });
+        });
+
+        // Live Geolocation with Auto-Centering and Follow Car
         if ("geolocation" in navigator) {
             navigator.geolocation.watchPosition((pos) => {
-                const { latitude, longitude, accuracy, altitude } = pos.coords;
-                currentPos = { lat: latitude, lon: longitude };
-                updateLiveCarMarker(latitude, longitude);
+                const { latitude, longitude, accuracy, altitude, heading, speed } = pos.coords;
+                currentPos = { lat: latitude, lon: longitude, heading, speed };
+                
+                updateLiveCarMarker(latitude, longitude, heading, speed, accuracy);
                 updateGpsAccuracyDisplay(accuracy);
                 updateProximityScaling(latitude, longitude);
+
+                // Auto-center map on car position as you drive
+                if (followCar) {
+                    map.panTo([latitude, longitude], { animate: false });
+                }
 
                 if (isRecording) {
                     recordGpsPoint(latitude, longitude, altitude, accuracy);
@@ -701,23 +964,72 @@
             });
         }
 
-        function updateLiveCarMarker(lat, lng) {
+        // Enlarged High-Visibility Vehicle Marker (Floats above waypoints with heading orientation)
+        function updateLiveCarMarker(lat, lng, heading, speed, accuracy) {
+            // Compute bearing if device hardware doesn't provide heading
+            let effectiveHeading = heading;
+            if ((effectiveHeading === null || effectiveHeading === undefined || isNaN(effectiveHeading)) && lastGpsCoords) {
+                const dLat = lat - lastGpsCoords.lat;
+                const dLon = lng - lastGpsCoords.lng;
+                if (Math.hypot(dLat, dLon) > 0.00004) {
+                    effectiveHeading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+                }
+            }
+            lastGpsCoords = { lat, lng };
+
+            const arrowHtml = (effectiveHeading !== null && effectiveHeading !== undefined && !isNaN(effectiveHeading))
+                ? `<div class="car-heading-arrow" style="transform: rotate(${Math.round(effectiveHeading)}deg);"></div>`
+                : `<div class="car-center-dot"></div>`;
+
+            const carHtml = `
+                <div class="rally-car-container">
+                    <div class="car-radar-ping"></div>
+                    <div class="car-core-puck">
+                        ${arrowHtml}
+                    </div>
+                </div>
+            `;
+
+            const icon = L.divIcon({
+                className: 'rally-car-marker-wrap',
+                html: carHtml,
+                iconSize: [48, 48],
+                iconAnchor: [24, 24]
+            });
+
             if (!liveMarker) {
-                liveMarker = L.circleMarker([lat, lng], {
-                    radius: 8,
-                    fillColor: '#00ffcc',
-                    color: '#ffffff',
-                    weight: 3,
-                    fillOpacity: 1
+                liveMarker = L.marker([lat, lng], {
+                    icon: icon,
+                    zIndexOffset: 9999
                 }).addTo(map);
             } else {
                 liveMarker.setLatLng([lat, lng]);
+                liveMarker.setIcon(icon);
+            }
+
+            // Accuracy radius halo
+            if (accuracy && accuracy > 5) {
+                if (!liveAccuracyCircle) {
+                    liveAccuracyCircle = L.circle([lat, lng], {
+                        radius: accuracy,
+                        color: '#00ffcc',
+                        weight: 1,
+                        fillColor: '#00ffcc',
+                        fillOpacity: 0.12
+                    }).addTo(map);
+                } else {
+                    liveAccuracyCircle.setLatLng([lat, lng]);
+                    liveAccuracyCircle.setRadius(accuracy);
+                }
+            } else if (liveAccuracyCircle) {
+                map.removeLayer(liveAccuracyCircle);
+                liveAccuracyCircle = null;
             }
         }
 
         function updateGpsAccuracyDisplay(acc) {
             const el = document.getElementById('gps-status');
-            if (acc) {
+            if (acc && el) {
                 const color = acc < 15 ? 'var(--accent)' : (acc < 35 ? 'var(--warning)' : 'var(--danger)');
                 el.innerHTML = `GPS: <span style="color:${color}; font-weight:bold;">±${Math.round(acc)}m</span>`;
             }
@@ -750,16 +1062,8 @@
             btn.innerHTML = isRecording ? "<span>⏹ Recording Recce...</span>" : "<span>⏺ Recce Record</span>";
             btn.classList.toggle('active', isRecording);
 
-            if (isRecording) {
-                if (navigator.wakeLock) {
-                    try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
-                }
-            } else {
-                if (wakeLock) {
-                    wakeLock.release().catch(()=>{});
-                    wakeLock = null;
-                }
-            }
+            // Ensure screen stays awake during recce
+            requestWakeLock(true);
         }
 
         function updateCockpitUI() {
@@ -788,15 +1092,10 @@
 
         function fitRouteBounds() {
             if (points.length > 0) {
+                setFollowCar(false);
                 map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
             } else if (currentPos) {
-                map.setView([currentPos.lat, currentPos.lon], 15);
-            }
-        }
-
-        function centerOnCar() {
-            if (currentPos) {
-                map.panTo([currentPos.lat, currentPos.lon]);
+                centerOnCar(true);
             }
         }
 
@@ -956,6 +1255,7 @@
             renderWaypoints();
             fitRouteBounds();
             saveBackup();
+            requestWakeLock();
         }
 
         function exportGPX() {
@@ -1041,9 +1341,11 @@
                         renderWaypoints();
                         updateCockpitUI();
                         fitRouteBounds();
+                        requestWakeLock();
                         return;
                     }
                 }
+                requestWakeLock();
             } catch(e){}
         }
     </script>
