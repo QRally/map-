@@ -393,55 +393,99 @@
         .rally-flag-marker {
             background: transparent;
             border: none;
+            overflow: visible !important;
+        }
+        .rally-flag-pin {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            width: 140px;
+            height: 46px;
+            position: relative;
+            pointer-events: auto;
+            cursor: pointer;
         }
         .flag-box {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 3px 7px;
-            border-radius: 4px;
+            gap: 5px;
+            padding: 4px 8px;
+            border-radius: 6px;
             font-size: 11px;
             font-weight: 800;
             white-space: nowrap;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.7);
-            border: 1px solid rgba(255,255,255,0.4);
-            transform: translateY(-50%) scale(1);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.85);
+            border: 1.5px solid rgba(255,255,255,0.7);
+            transform: scale(1);
             transform-origin: center bottom;
             transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease, border-color 0.25s ease, opacity 0.25s ease;
+            max-width: 200px;
         }
-        .flag-box:hover {
-            transform: translateY(-50%) scale(1.2);
-            z-index: 1000 !important;
+        .flag-ico {
+            font-size: 13px;
+            line-height: 1;
+        }
+        .flag-txt {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            letter-spacing: 0.02em;
+        }
+        .flag-pointer-tip {
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 6px solid #fff;
+            margin-top: -1px;
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.8));
+            transition: border-top-color 0.2s ease;
+        }
+        .flag-dot {
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 0 4px rgba(0,0,0,0.9);
+            margin-top: 1px;
         }
 
-        /* DYNAMIC ROAD APPROACH ENLARGEMENT */
+        .flag-box:hover {
+            transform: scale(1.18);
+        }
+
+        /* DYNAMIC ROAD APPROACH ENLARGEMENT - GROWS UPWARD, NEVER DOWNWARD INTO CAR */
         .flag-box.flag-approaching {
-            transform: translateY(-50%) scale(1.45) !important;
-            box-shadow: 0 0 18px rgba(0, 255, 204, 0.95), 0 8px 18px rgba(0,0,0,0.85) !important;
+            transform: scale(1.45) !important;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.95), 0 8px 22px rgba(0,0,0,0.9) !important;
             border: 2px solid #00ffcc !important;
-            z-index: 1500 !important;
         }
         .flag-box.flag-immediate {
-            transform: translateY(-50%) scale(1.9) !important;
-            box-shadow: 0 0 28px rgba(251, 191, 36, 1), 0 10px 24px rgba(0,0,0,0.9) !important;
+            transform: scale(1.9) !important;
+            box-shadow: 0 0 30px rgba(251, 191, 36, 1), 0 10px 28px rgba(0,0,0,0.95) !important;
             border: 2.5px solid #ffffff !important;
-            z-index: 2500 !important;
             animation: flag-pulse 0.7s infinite alternate !important;
         }
         .flag-box.flag-passed {
             opacity: 0.45 !important;
-            transform: translateY(-50%) scale(0.9) !important;
+            transform: scale(0.85) !important;
         }
         @keyframes flag-pulse {
-            0% { transform: translateY(-50%) scale(1.85); }
-            100% { transform: translateY(-50%) scale(2.05); }
+            0% { transform: scale(1.85); }
+            100% { transform: scale(2.05); }
         }
 
         .flag-start { background: #059669; color: #fff; border-color: #34d399; }
+        .flag-start + .flag-pointer-tip { border-top-color: #34d399; }
         .flag-finish { background: #000; color: #fff; border-color: #fff; }
+        .flag-finish + .flag-pointer-tip { border-top-color: #fff; }
         .flag-tc { background: #f59e0b; color: #000; border-color: #fef08a; }
+        .flag-tc + .flag-pointer-tip { border-top-color: #fef08a; }
         .flag-caution { background: #dc2626; color: #fff; border-color: #f87171; }
+        .flag-caution + .flag-pointer-tip { border-top-color: #f87171; }
         .flag-wpt { background: #0284c7; color: #fff; border-color: #7dd3fc; }
+        .flag-wpt + .flag-pointer-tip { border-top-color: #7dd3fc; }
 
         .leaflet-popup-content-wrapper {
             background: #111827 !important;
@@ -720,13 +764,22 @@
             else if (t.includes('hairpin')) cls = 'flag-caution';
 
             const iconSvg = getWptSymbol(type);
-            const html = `<div class="flag-box ${cls}"><span>${iconSvg}</span><span>${label}</span></div>`;
+            const html = `
+                <div class="rally-flag-pin">
+                    <div class="flag-box ${cls}">
+                        <span class="flag-ico">${iconSvg}</span>
+                        <span class="flag-txt">${label}</span>
+                    </div>
+                    <div class="flag-pointer-tip"></div>
+                    <div class="flag-dot"></div>
+                </div>
+            `;
             return L.divIcon({
                 className: 'rally-flag-marker',
                 html: html,
-                iconSize: [80, 24],
-                iconAnchor: [40, 24],
-                popupAnchor: [0, -20]
+                iconSize: [140, 46],
+                iconAnchor: [70, 46],
+                popupAnchor: [0, -44]
             });
         }
 
@@ -736,7 +789,8 @@
 
             waypoints.forEach((wpt, index) => {
                 const marker = L.marker([wpt.lat, wpt.lon], {
-                    icon: createFlagIcon(wpt.type, wpt.name)
+                    icon: createFlagIcon(wpt.type, wpt.name),
+                    zIndexOffset: 2000
                 });
                 const popupHtml = `
                     <div style="font-family:'Plus Jakarta Sans',sans-serif; min-width:180px;">
@@ -799,10 +853,15 @@
                     flagBox.classList.remove('flag-approaching', 'flag-immediate', 'flag-passed');
                     if (isPassed) {
                         flagBox.classList.add('flag-passed');
+                        marker.setZIndexOffset(500);
                     } else if (dMeters <= 75) {
                         flagBox.classList.add('flag-immediate');
+                        marker.setZIndexOffset(25000);
                     } else if (dMeters <= 220) {
                         flagBox.classList.add('flag-approaching');
+                        marker.setZIndexOffset(18000);
+                    } else {
+                        marker.setZIndexOffset(2000);
                     }
                 }
 
@@ -1016,11 +1075,12 @@
             if (!liveMarker) {
                 liveMarker = L.marker([lat, lng], {
                     icon: icon,
-                    zIndexOffset: 9999
+                    zIndexOffset: 1000
                 }).addTo(map);
             } else {
                 liveMarker.setLatLng([lat, lng]);
                 liveMarker.setIcon(icon);
+                liveMarker.setZIndexOffset(1000);
             }
 
             // Accuracy radius halo
