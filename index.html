@@ -170,6 +170,72 @@
             cursor: pointer;
         }
         .btn-mini-reset:hover { background: #3f3f46; color: #fff; }
+        .btn-mini-mode {
+            font-size: 9px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            padding: 1px 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            touch-action: manipulation;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+        }
+        .btn-mode-down {
+            background: rgba(245, 158, 11, 0.25);
+            color: #fbbf24;
+            border-color: rgba(245, 158, 11, 0.6);
+        }
+        .btn-mode-down:hover {
+            background: rgba(245, 158, 11, 0.4);
+            color: #fff;
+        }
+        .btn-mode-up {
+            background: rgba(16, 185, 129, 0.25);
+            color: #34d399;
+            border-color: rgba(16, 185, 129, 0.6);
+        }
+        .btn-mode-up:hover {
+            background: rgba(16, 185, 129, 0.4);
+            color: #fff;
+        }
+        .trip-sub {
+            font-size: 9px;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-top: 3px;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stage-alert-banner {
+            display: none;
+            position: absolute;
+            top: 58px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1200;
+            background: rgba(6, 13, 23, 0.95);
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.03em;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 255, 204, 0.4), 0 2px 10px rgba(0,0,0,0.9);
+            animation: slide-down-fade 0.3s ease-out;
+            pointer-events: none;
+            max-width: 90%;
+        }
+        @keyframes slide-down-fade {
+            0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+            100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
 
         /* Telemetry & Calibration Strip - 2-row layout guaranteed zero button overlap */
         .cal-strip {
@@ -543,6 +609,7 @@
 
     <!-- Leaflet Map Container (Unobstructed View) -->
     <div id="map">
+        <div id="stageAlertBanner" class="stage-alert-banner"></div>
         <button id="recenterBtn" class="floating-recenter" onclick="centerOnCar(true)">
             <span>🎯 Recenter Car (Follow)</span>
         </button>
@@ -559,16 +626,21 @@
                 <div class="trip-value">
                     <span id="val-total">0.00</span><span class="trip-unit">km</span>
                 </div>
+                <div class="trip-sub" id="sub-total">▲ DRIVEN</div>
             </div>
 
             <div class="trip-card">
                 <div class="trip-label">
-                    <span>Stage Odo</span>
-                    <button class="btn-mini-reset" onclick="resetStageDist()">ZERO</button>
+                    <span id="label-stage-title">Stage Odo</span>
+                    <div style="display:flex; gap:3px;">
+                        <button id="btnStageMode" class="btn-mini-mode btn-mode-down" onclick="toggleStageCountMode()" title="Toggle Count Down / Count Up">▼ DN</button>
+                        <button class="btn-mini-reset" onclick="resetStageDist()" title="Zero / Re-arm to Stage Total">ZERO</button>
+                    </div>
                 </div>
                 <div class="trip-value">
                     <span id="val-stage">0.00</span><span class="trip-unit">km</span>
                 </div>
+                <div class="trip-sub" id="sub-stage">▼ 0.00 km TO GO</div>
             </div>
 
             <div class="trip-card">
@@ -579,6 +651,7 @@
                 <div class="trip-value">
                     <span id="val-interval">0.00</span><span class="trip-unit">km</span>
                 </div>
+                <div class="trip-sub">▲ NOTE RESET</div>
             </div>
         </div>
 
@@ -653,6 +726,14 @@
         let totalDist = 0;
         let stageDist = 0;
         let intervalDist = 0;
+        let routeLength = 0;
+        let stageDistDriven = 0;
+        let stageDistRemaining = 0;
+        let stageCountMode = 'down'; // 'down' (countdown) or 'up' (countup)
+        let stageStartDetected = false;
+        let lastDriveGps = null;
+        let lastRecordedGps = null;
+        let stageAlertTimeout = null;
         let isRecording = false;
         let liveMarker = null;
         let liveAccuracyCircle = null;
@@ -832,6 +913,100 @@
                 osc.start();
                 osc.stop(ctx.currentTime + (isImmediate ? 0.18 : 0.12));
             } catch(e) {}
+        }
+
+        function showStageAlert(msg, durationMs = 4000) {
+            const banner = document.getElementById('stageAlertBanner');
+            if (!banner) return;
+            banner.innerHTML = msg;
+            banner.style.display = 'block';
+            if (stageAlertTimeout) clearTimeout(stageAlertTimeout);
+            stageAlertTimeout = setTimeout(() => {
+                banner.style.display = 'none';
+            }, durationMs);
+        }
+
+        function playStartReachedChime() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const now = ctx.currentTime;
+                
+                // Crisp rising double-tone chime (start signal)
+                const osc1 = ctx.createOscillator();
+                const gain1 = ctx.createGain();
+                osc1.connect(gain1);
+                gain1.connect(ctx.destination);
+                osc1.type = 'sine';
+                osc1.frequency.setValueAtTime(880, now);
+                gain1.gain.setValueAtTime(0.2, now);
+                gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+                osc1.start(now);
+                osc1.stop(now + 0.16);
+
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.type = 'triangle';
+                osc2.frequency.setValueAtTime(1320, now + 0.14);
+                gain2.gain.setValueAtTime(0.25, now + 0.14);
+                gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+                osc2.start(now + 0.14);
+                osc2.stop(now + 0.38);
+            } catch(e) {}
+        }
+
+        function playFinishChime() {
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (!AudioCtx) return;
+                const ctx = new AudioCtx();
+                const now = ctx.currentTime;
+                
+                [1046.5, 1318.5, 1568].forEach((freq, idx) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.22);
+                    osc.start(now + idx * 0.12);
+                    osc.stop(now + idx * 0.12 + 0.22);
+                });
+            } catch(e) {}
+        }
+
+        function checkStartProximity(carLat, carLon) {
+            let startCoord = null;
+            if (waypoints && waypoints.length > 0) {
+                const startWpt = waypoints.find(w => (w.type || '').toLowerCase().includes('start'));
+                if (startWpt) startCoord = { lat: startWpt.lat, lon: startWpt.lon };
+            }
+            if (!startCoord && points.length > 0) {
+                startCoord = { lat: points[0].lat, lon: points[0].lon };
+            }
+            if (!startCoord) return;
+
+            const dMeters = Math.round(haversine(carLat, carLon, startCoord.lat, startCoord.lon) * 1000);
+
+            // Trigger when within 60 meters of stage start
+            if (dMeters <= 60 && !stageStartDetected) {
+                stageStartDetected = true;
+                stageDistDriven = 0;
+                if (routeLength > 0) {
+                    stageDistRemaining = routeLength;
+                }
+                stageCountMode = 'down'; // Active countdown mode
+                updateCockpitUI();
+                playStartReachedChime();
+                showStageAlert(`🚩 STAGE START REACHED &bull; COUNTDOWN ARMED (${(routeLength || 0).toFixed(2)} km)`);
+            } else if (dMeters > 300) {
+                stageStartDetected = false;
+            }
         }
 
         // PROXIMITY SCALING (Flags enlarge on road approach, clean beep alerts crew, zero screen obstruction)
@@ -1021,6 +1196,7 @@
                 updateLiveCarMarker(latitude, longitude, heading, speed, accuracy);
                 updateGpsAccuracyDisplay(accuracy);
                 updateProximityScaling(latitude, longitude);
+                checkStartProximity(latitude, longitude);
 
                 // Auto-center map on car position as you drive
                 if (followCar) {
@@ -1029,7 +1205,23 @@
 
                 if (isRecording) {
                     recordGpsPoint(latitude, longitude, altitude, accuracy);
+                } else if (lastDriveGps) {
+                    const d = haversine(lastDriveGps.lat, lastDriveGps.lon, latitude, longitude);
+                    if (d > 0.003 && d < MAX_JUMP_KM) {
+                        totalDist += d;
+                        stageDistDriven += d;
+                        if (routeLength > 0) {
+                            stageDistRemaining = Math.max(0, routeLength - stageDistDriven);
+                            if (stageDistRemaining === 0 && d > 0) {
+                                playFinishChime();
+                                showStageAlert("🏁 FLYING FINISH &bull; STAGE COMPLETE!");
+                            }
+                        }
+                        intervalDist += d;
+                        updateCockpitUI();
+                    }
                 }
+                lastDriveGps = { lat: latitude, lon: longitude };
             }, (err) => {
                 document.getElementById('gps-status').innerHTML = '<span style="color:#ef4444;">GPS Err: ' + err.message + '</span>';
             }, {
@@ -1112,17 +1304,24 @@
         }
 
         function recordGpsPoint(lat, lon, ele, accuracy) {
-            if (points.length > 0) {
-                const last = points[points.length - 1];
-                const d = haversine(last.lat, last.lon, lat, lon);
+            if (lastRecordedGps) {
+                const d = haversine(lastRecordedGps.lat, lastRecordedGps.lon, lat, lon);
                 if (d > MAX_JUMP_KM) {
                     console.warn("GPS jump ignored: " + d.toFixed(3) + " km");
                     return;
                 }
                 totalDist += d;
-                stageDist += d;
+                stageDistDriven += d;
+                if (routeLength > 0) {
+                    stageDistRemaining = Math.max(0, routeLength - stageDistDriven);
+                    if (stageDistRemaining === 0 && d > 0) {
+                        playFinishChime();
+                        showStageAlert("🏁 FLYING FINISH &bull; STAGE COMPLETE!");
+                    }
+                }
                 intervalDist += d;
             }
+            lastRecordedGps = { lat, lon };
 
             const pt = { lat, lon, ele: ele ? Math.round(ele * 10) / 10 : null, cumDist: totalDist };
             points.push(pt);
@@ -1137,21 +1336,71 @@
             const btn = document.getElementById('recordBtn');
             btn.innerHTML = isRecording ? "<span>⏹ Recording Recce...</span>" : "<span>⏺ Recce Record</span>";
             btn.classList.toggle('active', isRecording);
+            lastRecordedGps = isRecording && currentPos ? { lat: currentPos.lat, lon: currentPos.lon } : null;
 
             // Ensure screen stays awake during recce
             requestWakeLock(true);
+            updateCockpitUI();
         }
 
         function updateCockpitUI() {
-            document.getElementById('val-total').innerText = totalDist.toFixed(2);
-            document.getElementById('val-stage').innerText = stageDist.toFixed(2);
-            document.getElementById('val-interval').innerText = intervalDist.toFixed(2);
-            document.getElementById('stat-pts').innerText = points.length + ' PTS';
+            const elTotal = document.getElementById('val-total');
+            const elStage = document.getElementById('val-stage');
+            const elInterval = document.getElementById('val-interval');
+            const elPts = document.getElementById('stat-pts');
+            const elBtnMode = document.getElementById('btnStageMode');
+            const elSubStage = document.getElementById('sub-stage');
+            const elSubTotal = document.getElementById('sub-total');
+
+            if (elTotal) elTotal.innerText = totalDist.toFixed(2);
+            if (elInterval) elInterval.innerText = intervalDist.toFixed(2);
+            if (elPts) elPts.innerText = points.length + ' PTS';
+
+            if (stageCountMode === 'down') {
+                if (elStage) {
+                    elStage.innerText = stageDistRemaining.toFixed(2);
+                    elStage.style.color = '#fbbf24'; // Amber countdown
+                }
+                if (elBtnMode) {
+                    elBtnMode.innerText = '▼ DN';
+                    elBtnMode.className = 'btn-mini-mode btn-mode-down';
+                }
+                if (elSubStage) {
+                    elSubStage.innerHTML = `▲ <b>${stageDistDriven.toFixed(2)}</b> km DRIVEN`;
+                }
+            } else {
+                if (elStage) {
+                    elStage.innerText = stageDistDriven.toFixed(2);
+                    elStage.style.color = '#00ffcc'; // Cyan countup
+                }
+                if (elBtnMode) {
+                    elBtnMode.innerText = '▲ UP';
+                    elBtnMode.className = 'btn-mini-mode btn-mode-up';
+                }
+                if (elSubStage) {
+                    elSubStage.innerHTML = `▼ <b>${stageDistRemaining.toFixed(2)}</b> km TO GO`;
+                }
+            }
+
+            if (elSubTotal) {
+                elSubTotal.innerText = isRecording ? '⏺ RECORDING' : '▲ TOTAL DRIVEN';
+            }
+        }
+
+        function toggleStageCountMode() {
+            stageCountMode = (stageCountMode === 'down') ? 'up' : 'down';
+            updateCockpitUI();
         }
 
         function resetStageDist() {
-            stageDist = 0;
+            stageDistDriven = 0;
+            if (routeLength > 0) {
+                stageDistRemaining = routeLength;
+            } else {
+                stageDistRemaining = 0;
+            }
             updateCockpitUI();
+            showStageAlert("STAGE ODO ARMED " + (routeLength > 0 ? `(${routeLength.toFixed(2)} km)` : "0.00 km"));
         }
 
         function resetIntervalDist() {
@@ -1160,7 +1409,13 @@
         }
 
         function adjustTripmeter(delta) {
-            stageDist = Math.max(0, stageDist + delta);
+            if (stageCountMode === 'down') {
+                stageDistRemaining = Math.max(0, stageDistRemaining + delta);
+                stageDistDriven = Math.max(0, (routeLength || 0) - stageDistRemaining);
+            } else {
+                stageDistDriven = Math.max(0, stageDistDriven + delta);
+                stageDistRemaining = Math.max(0, (routeLength || 0) - stageDistDriven);
+            }
             intervalDist = Math.max(0, intervalDist + delta);
             totalDist = Math.max(0, totalDist + delta);
             updateCockpitUI();
@@ -1325,13 +1580,19 @@
                 routeLine.setLatLngs(latLngs);
             }
 
-            stageDist = totalDist;
-            intervalDist = totalDist;
+            routeLength = totalDist;
+            stageDistDriven = 0;
+            stageDistRemaining = routeLength;
+            stageCountMode = 'down'; // Default to countdown when a stage route is loaded
+            stageStartDetected = false;
+            intervalDist = 0;
+            totalDist = 0;
             updateCockpitUI();
             renderWaypoints();
             fitRouteBounds();
             saveBackup();
             requestWakeLock();
+            showStageAlert(`ROUTE LOADED &bull; ${routeLength.toFixed(2)} km &bull; COUNTDOWN ARMED AT START`);
         }
 
         function exportGPX() {
@@ -1380,12 +1641,19 @@
             totalDist = 0;
             stageDist = 0;
             intervalDist = 0;
+            routeLength = 0;
+            stageDistDriven = 0;
+            stageDistRemaining = 0;
+            stageStartDetected = false;
             if (routeLine) routeLine.setLatLngs([]);
             markersGroup.clearLayers();
             updateCockpitUI();
             localStorage.removeItem('rally_master_points');
             localStorage.removeItem('rally_master_wpts');
             localStorage.removeItem('rally_master_dist');
+            localStorage.removeItem('rally_master_routelen');
+            localStorage.removeItem('rally_master_stagedriven');
+            localStorage.removeItem('rally_master_stagemode');
         }
 
         function saveBackup() {
@@ -1393,6 +1661,9 @@
                 localStorage.setItem('rally_master_points', JSON.stringify(points));
                 localStorage.setItem('rally_master_wpts', JSON.stringify(waypoints));
                 localStorage.setItem('rally_master_dist', totalDist.toString());
+                localStorage.setItem('rally_master_routelen', routeLength.toString());
+                localStorage.setItem('rally_master_stagedriven', stageDistDriven.toString());
+                localStorage.setItem('rally_master_stagemode', stageCountMode);
             } catch(e){}
         }
 
@@ -1408,8 +1679,11 @@
                         points = parsed;
                         waypoints = wpts ? JSON.parse(wpts) : [];
                         totalDist = parseFloat(dist) || 0;
-                        stageDist = totalDist;
-                        intervalDist = totalDist;
+                        routeLength = parseFloat(localStorage.getItem('rally_master_routelen')) || totalDist;
+                        stageDistDriven = parseFloat(localStorage.getItem('rally_master_stagedriven')) || 0;
+                        stageDistRemaining = (routeLength > 0) ? Math.max(0, routeLength - stageDistDriven) : 0;
+                        stageCountMode = localStorage.getItem('rally_master_stagemode') || (routeLength > 0 ? 'down' : 'up');
+                        intervalDist = 0;
 
                         if (routeLine) {
                             routeLine.setLatLngs(points.map(p => [p.lat, p.lon]));
